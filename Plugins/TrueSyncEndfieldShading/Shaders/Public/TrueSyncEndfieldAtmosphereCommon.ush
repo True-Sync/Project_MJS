@@ -1,0 +1,76 @@
+#ifndef TSE_ATMOSPHERE_COMMON_USH
+#define TSE_ATMOSPHERE_COMMON_USH
+
+// -----------------------------------------------------------------------------
+// TrueSyncEndfieldAtmosphereCommon.ush
+//
+// TrueSyncEndfieldShading 플러그인의 대기감 연출에 공통으로 쓰는 보조 함수 모음입니다.
+// 함수는 최대한 작고 조합 가능하게 유지해서, 나중에 포스트 프로세스 셰이더나
+// 머티리얼 Custom 노드에서도 재사용할 수 있도록 구성했습니다.
+//
+// 목표:
+// - 전경의 가독성은 유지한다.
+// - 원거리 배경은 더 부드럽고 painterly한 방향으로 민다.
+// - 환경이 과하게 딱딱한 셀 셰이딩처럼 보이지 않게 한다.
+// -----------------------------------------------------------------------------
+
+float TSE_Luminance(float3 InColor)
+{
+	return dot(InColor, float3(0.299f, 0.587f, 0.114f));
+}
+
+float TSE_SoftThreshold(float Value, float Center, float Softness)
+{
+	const float HalfSoftness = max(Softness * 0.5f, 1e-5f);
+	return smoothstep(Center - HalfSoftness, Center + HalfSoftness, Value);
+}
+
+float3 TSE_Desaturate(float3 InColor, float Amount)
+{
+	const float Luma = TSE_Luminance(InColor);
+	return lerp(InColor, Luma.xxx, saturate(Amount));
+}
+
+float TSE_QuantizeScalar(float Value, float StepCount)
+{
+	const float SafeStepCount = max(StepCount, 2.0f);
+	return floor(Value * SafeStepCount + 0.5f) / SafeStepCount;
+}
+
+float3 TSE_RescaleColorFromReferenceLuma(float3 InColor, float ReferenceLuma, float TargetLuma)
+{
+	return InColor * (TargetLuma / max(ReferenceLuma, 1e-4f));
+}
+
+float3 TSE_BuildPainterlyBackgroundColor(
+	float3 InColor,
+	float3 NeighborhoodAverage,
+	float DesaturationAmount,
+	float ValueStepStrength,
+	float ValueStepCount)
+{
+	// 입력 색을 주변 평균색 쪽으로 조금 당겨서, 먼 배경이 자잘한 디테일보다는
+	// 큰 색 덩어리로 읽히게 만든다.
+	const float3 SmoothedColor = lerp(InColor, NeighborhoodAverage, 0.72f);
+
+	// 채도를 약간 줄이면 멀리 있는 배경이 날카로운 PBR 표면보다는
+	// 채색된 배경처럼 느껴진다.
+	const float Luma = TSE_Luminance(SmoothedColor);
+	const float BrightRegionMask = smoothstep(0.55f, 0.85f, Luma);
+	const float EffectiveDesaturationAmount = DesaturationAmount * lerp(1.0f, 0.68f, BrightRegionMask);
+	const float3 DesaturatedColor = TSE_Desaturate(SmoothedColor, EffectiveDesaturationAmount);
+
+	// 양자화된 명도는 아주 약하게만 사용한다.
+	// 강한 셀 셰이딩이 목적이 아니라, 멀리 있는 형태의 값 단계를 살짝 압축해서
+	// 배경을 단순화하는 용도다.
+	const float QuantizedLuma = TSE_QuantizeScalar(Luma, ValueStepCount);
+	const float EffectiveValueStepStrength = ValueStepStrength * lerp(1.0f, 0.22f, BrightRegionMask);
+	const float3 QuantizedColor = TSE_RescaleColorFromReferenceLuma(
+		DesaturatedColor,
+		Luma,
+		QuantizedLuma);
+
+	return lerp(DesaturatedColor, QuantizedColor, saturate(EffectiveValueStepStrength));
+}
+
+#endif

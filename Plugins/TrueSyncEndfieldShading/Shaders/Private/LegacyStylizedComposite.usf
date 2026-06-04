@@ -1,0 +1,476 @@
+#define NEEDS_SCENE_TEXTURES 1
+
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
+#include "/Engine/Private/SceneTextureParameters.ush"
+#include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldAtmosphereCommon.ush"
+
+// -----------------------------------------------------------------------------
+// LegacyStylizedComposite.usf
+//
+// 이전 실험용 전체 화면 포스트 프로세스 패스입니다.
+// 현재 C++에서 컴파일되는 셰이더는 TrueSyncEndfieldComposite.usf이며,
+// 이 파일은 비교/학습용 legacy reference로만 남깁니다.
+//
+// 큰 순서:
+// 1. SceneColor / SceneDepth / GBuffer 노멀 신호를 읽는다.
+// 2. 실루엣과 내부 crease edge를 검출한다.
+// 3. 하이라이트를 살짝 들어 올린다.
+// 4. 절제된 desaturation + cyan/blue 계열 색 이동을 적용한다.
+// 5. 먼 배경을 painterly한 방향으로 민다.
+// 6. 캐릭터와 깊은 그림자를 보호하면서 거리 haze를 적용한다.
+// 7. 딱딱한 검은선 대신 로컬 색 기반 외곽선을 합성한다.
+// 8. 캐릭터/실내 보정과 최종 콘트라스트를 정리한다.
+//
+// 이 패스는 순수 셀 셰이더가 아니라, 하이브리드 스타일라이징 패스다.
+// -----------------------------------------------------------------------------
+
+SCREEN_PASS_TEXTURE_VIEWPORT(InputViewport)
+
+Texture2D InputSceneColorTexture;
+SamplerState InputSceneColorSampler;
+
+// C++의 FTrueSyncEndfieldCompositePS::FParameters에서 바인딩되는 값들.
+float DepthOutlineThickness;
+float DepthOutlineThreshold;
+float DepthOutlineIntensity;
+float NormalEdgeThreshold;
+float NormalEdgeIntensity;
+float OutlineOpacity;
+float SilhouetteBoost;
+float CreaseBoost;
+float HazeStartDistance;
+float HazeEndDistance;
+float HazeIntensity;
+float HazeTintStrength;
+float PainterlyStartDistance;
+float PainterlyEndDistance;
+float PainterlyBlend;
+float PainterlyDesaturation;
+float PainterlyValueStepStrength;
+float PainterlyValueStepCount;
+float3 CoolTint;
+float HighlightThreshold;
+float HighlightIntensity;
+float DesaturationAmount;
+float ColorShiftStrength;
+float CharacterStencilEnabled;
+float CharacterStencilValue;
+float CharacterHazeMultiplier;
+float CharacterEdgeMultiplier;
+float CharacterGradingSuppression;
+float CharacterContrast;
+float ShadowLumaStart;
+float ShadowLumaEnd;
+float ShadowTintSuppression;
+float ShadowHazeMultiplier;
+float InteriorBlend;
+float InteriorHazeMultiplier;
+float InteriorColorShiftMultiplier;
+float InteriorDesaturationMultiplier;
+float InteriorHazeTintMultiplier;
+float InteriorContrast;
+float DebugInteriorBlend;
+float SkyOutlineCutoffStart;
+float SkyOutlineCutoffEnd;
+float SmoothSurfaceEdgeSuppression;
+float SoftLumaGroupStrength;
+float SoftLumaGroupRange;
+float TessellationDepthMinMultiple;
+float TessellationDepthMaxMultiple;
+
+float3 ToPerceptualColor(float3 InColor)
+{
+	const float3 SafeColor = max(InColor, 0.0f.xxx);
+	return SafeColor / (1.0f.xxx + SafeColor);
+}
+
+float2 GetSceneUV(float4 UVAndScreenPos)
+{
+	return clamp(UVAndScreenPos.xy, InputViewport_UVViewportBilinearMin, InputViewport_UVViewportBilinearMax);
+}
+
+float3 SampleSceneColor(float2 UV)
+{
+	return Texture2DSampleLevel(InputSceneColorTexture, InputSceneColorSampler, UV, 0).rgb;
+}
+
+float SampleLinearDepth(float2 UV)
+{
+	return max(CalcSceneDepth(UV), 1.0f);
+}
+
+float3 SampleSceneColorNeighborhoodAverage(float2 UV, float2 PixelStep)
+{
+	float3 Sum = SampleSceneColor(UV);
+	Sum += SampleSceneColor(UV + float2(PixelStep.x, 0.0f));
+	Sum += SampleSceneColor(UV - float2(PixelStep.x, 0.0f));
+	Sum += SampleSceneColor(UV + float2(0.0f, PixelStep.y));
+	Sum += SampleSceneColor(UV - float2(0.0f, PixelStep.y));
+	return Sum * 0.2f;
+}
+
+float3 SampleNormalSignal(float2 UV)
+{
+#if SHADING_PATH_DEFERRED
+	// 인코딩된 GBuffer 노멀 신호를 그대로 사용한다.
+	// 첫 단계에서는 디코드 비용을 들이기보다, 비교가 빠르고 안정적인 신호로
+	// edge만 잡는 편이 더 안전하다.
+	return Texture2DSampleLevel(SceneTexturesStruct.GBufferBTexture, SceneTexturesStruct_GBufferBTextureSampler, UV, 0).rgb;
+#else
+	// Mobile Forward(iOS 등)는 GBuffer가 없으므로 중립값 반환.
+	// 노멀 기반 Crease 엣지는 비활성화되고, 깊이 기반 실루엣 엣지만 동작한다.
+	return 0.5f.xxx;
+#endif
+}
+
+float SampleCharacterMask(uint2 PixelPos)
+{
+	if (CharacterStencilEnabled < 0.5f)
+	{
+		return 0.0f;
+	}
+
+#if SHADING_PATH_DEFERRED
+	// Deferred(PC/콘솔): Custom Stencil에서 캐릭터 픽셀을 판별한다.
+	const uint StencilValue = CalcSceneCustomStencil(PixelPos);
+	return abs((float)StencilValue - CharacterStencilValue) < 0.5f ? 1.0f : 0.0f;
+#else
+	// Mobile Forward(iOS 등): Custom Stencil을 신뢰할 수 없으므로
+	// 캐릭터 마스크를 0으로 반환한다. 캐릭터 별도 보정은 비활성화된다.
+	return 0.0f;
+#endif
+}
+
+float ComputeDepthRelativeDelta(float2 UV, float2 PixelStep)
+{
+	// 깊이 상대 델타(정규화 전)를 반환한다.
+	// ComputeDepthEdge가 이 값을 임계값으로 나눠 최종 엣지 강도를 만든다.
+	// 임계값 배율을 알아야 테셀레이션 엣지인지 실제 특징 엣지인지 판별할 수 있다.
+	const float CenterDepth = SampleLinearDepth(UV);
+
+	float MaxDelta = 0.0f;
+	MaxDelta = max(MaxDelta, abs(SampleLinearDepth(UV + float2(PixelStep.x, 0.0f)) - CenterDepth));
+	MaxDelta = max(MaxDelta, abs(SampleLinearDepth(UV - float2(PixelStep.x, 0.0f)) - CenterDepth));
+	MaxDelta = max(MaxDelta, abs(SampleLinearDepth(UV + float2(0.0f, PixelStep.y)) - CenterDepth));
+	MaxDelta = max(MaxDelta, abs(SampleLinearDepth(UV - float2(0.0f, PixelStep.y)) - CenterDepth));
+
+	return MaxDelta / max(CenterDepth, 1.0f);
+}
+
+float ComputeDepthEdge(float2 UV, float2 PixelStep)
+{
+	const float RelativeDelta = ComputeDepthRelativeDelta(UV, PixelStep);
+	return saturate((RelativeDelta / max(DepthOutlineThreshold, 1e-5f)) * DepthOutlineIntensity);
+}
+
+float ComputeNormalEdge(float2 UV, float2 PixelStep)
+{
+#if SHADING_PATH_DEFERRED
+	// Deferred: GBuffer 노멀 신호 비교로 crease 검출.
+	const float3 CenterNormal = SampleNormalSignal(UV);
+
+	float MaxDelta = 0.0f;
+	MaxDelta = max(MaxDelta, length(SampleNormalSignal(UV + float2(PixelStep.x, 0.0f)) - CenterNormal));
+	MaxDelta = max(MaxDelta, length(SampleNormalSignal(UV - float2(PixelStep.x, 0.0f)) - CenterNormal));
+	MaxDelta = max(MaxDelta, length(SampleNormalSignal(UV + float2(0.0f, PixelStep.y)) - CenterNormal));
+	MaxDelta = max(MaxDelta, length(SampleNormalSignal(UV - float2(0.0f, PixelStep.y)) - CenterNormal));
+
+	const float Threshold = max(NormalEdgeThreshold, 1e-5f);
+	return saturate((MaxDelta - Threshold) / (1.0f - Threshold)) * NormalEdgeIntensity;
+#else
+	// Mobile Forward(iOS 등): GBuffer 없이 노멀 엣지 검출 불가. 0 반환.
+	// 실루엣(깊이 기반 엣지)은 계속 정상 동작한다.
+	return 0.0f;
+#endif
+}
+
+float ComputeShadowProtectionMask(float3 InColor)
+{
+	// AfterDOF 시점의 입력은 아직 HDR 성향이 남아 있으므로,
+	// 먼저 단순한 perceptual 범위로 바꾼 뒤 어두운 그림자 영역인지 판정한다.
+	const float3 PerceptualColor = ToPerceptualColor(InColor);
+	const float Luma = dot(PerceptualColor, float3(0.299f, 0.587f, 0.114f));
+	const float ShadowRamp = saturate((Luma - ShadowLumaStart) / max(ShadowLumaEnd - ShadowLumaStart, 1e-5f));
+	return 1.0f - ShadowRamp;
+}
+
+float3 BuildNeutralHazeColor(float3 InColor)
+{
+	const float Luma = dot(InColor, float3(0.299f, 0.587f, 0.114f));
+	return lerp(InColor, Luma.xxx, 0.22f);
+}
+
+float3 ApplyStylizedGrading(float3 InColor, float DesaturationStrength, float ShiftStrength)
+{
+	const float Luma = dot(InColor, float3(0.299f, 0.587f, 0.114f));
+	float3 Color = lerp(InColor, Luma.xxx, saturate(DesaturationStrength));
+
+	float3 ShiftedColor = Color;
+	ShiftedColor.r *= (1.0f - 0.08f * ShiftStrength);
+	ShiftedColor.g *= (1.0f + 0.03f * ShiftStrength);
+	ShiftedColor.b *= (1.0f + 0.12f * ShiftStrength);
+
+	return lerp(Color, ShiftedColor, saturate(ShiftStrength));
+}
+
+float3 ApplyContrastAroundMidGray(float3 InColor, float Contrast)
+{
+	return (InColor - 0.5f) * Contrast + 0.5f;
+}
+
+float ComputePerceptualLuma(float3 InColor)
+{
+	return dot(ToPerceptualColor(InColor), float3(0.299f, 0.587f, 0.114f));
+}
+
+float ComputeNeighborhoodLumaDelta(float2 UV, float2 PixelStep)
+{
+	const float CenterLuma = ComputePerceptualLuma(SampleSceneColor(UV));
+	float MaxDelta = 0.0f;
+	MaxDelta = max(MaxDelta, abs(ComputePerceptualLuma(SampleSceneColor(UV + float2(PixelStep.x, 0.0f))) - CenterLuma));
+	MaxDelta = max(MaxDelta, abs(ComputePerceptualLuma(SampleSceneColor(UV - float2(PixelStep.x, 0.0f))) - CenterLuma));
+	MaxDelta = max(MaxDelta, abs(ComputePerceptualLuma(SampleSceneColor(UV + float2(0.0f, PixelStep.y))) - CenterLuma));
+	MaxDelta = max(MaxDelta, abs(ComputePerceptualLuma(SampleSceneColor(UV - float2(0.0f, PixelStep.y))) - CenterLuma));
+	return MaxDelta;
+}
+
+void MainPS(
+	noperspective float4 UVAndScreenPos : TEXCOORD0,
+	in FStereoPSInput StereoInput,
+	out float4 OutColor : SV_Target0)
+{
+	ResolvedView = ResolveView();
+
+	const float2 UV = GetSceneUV(UVAndScreenPos);
+	const float2 PixelPos = UVAndScreenPos.zw;
+	const float2 PixelStep = InputViewport_ExtentInverse * max(DepthOutlineThickness, 1.0f);
+	const float CharacterMask = SampleCharacterMask(uint2(PixelPos));
+	const float EffectiveInteriorBlend = saturate(InteriorBlend);
+
+	float4 SceneSample = Texture2DSampleLevel(InputSceneColorTexture, InputSceneColorSampler, UV, 0);
+	float3 Color = SceneSample.rgb;
+
+	// -------------------------------------------------------------------------
+	// 0. 원거리(스카이) 픽셀 마스크 — 엣지 검출 억제용
+	// -------------------------------------------------------------------------
+	// 스카이 스피어/돔 메쉬의 폴리곤 경계에서 깊이 불연속이 생겨,
+	// 엣지가 잘못 검출되고 BroadLightingProtection → HighlightMask 연쇄로
+	// 밝은 폴리곤 선이 하늘에 나타난다.
+	// SkyOutlineCutoffStart~End 구간에서 엣지 강도를 부드럽게 0으로 fade.
+	const float LinearDepth = SampleLinearDepth(UV);
+	const float SkyEdgeSuppression = saturate(
+		(LinearDepth - SkyOutlineCutoffStart) /
+		max(SkyOutlineCutoffEnd - SkyOutlineCutoffStart, 1.0f));
+
+	// -------------------------------------------------------------------------
+	// 1. 화면 공간 edge 검출
+	// -------------------------------------------------------------------------
+	// 깊이 상대 델타(정규화 전)를 먼저 구해 둔다.
+	// 이 값의 임계값 배율로 "실제 특징 엣지"와 "테셀레이션 엣지"를 구분한다.
+	const float DepthRelativeDelta = ComputeDepthRelativeDelta(UV, PixelStep);
+	const float RawDepthEdge = saturate(
+		(DepthRelativeDelta / max(DepthOutlineThreshold, 1e-5f)) * DepthOutlineIntensity)
+		* (1.0f - SkyEdgeSuppression);
+	const float RawNormalEdge = ComputeNormalEdge(UV, PixelStep) * (1.0f - SkyEdgeSuppression);
+
+	// 테셀레이션 엣지 리스크 계산
+	// - 임계값 대비 배율이 낮은 깊이 엣지 (= 임계값을 겨우 넘은 약한 엣지) → 테셀레이션 의심
+	// - 노멀도 일치하지 않으면 → 매끄러운 곡면의 폴리곤 경계선으로 판단, 억제
+	// - 강한 깊이 엣지 (진짜 실루엣) 또는 노멀 엣지가 있으면 → 억제 없음
+	// BroadSurfaceLumaDelta 기반이 아니므로 폴리곤 면마다 억제 강도가 달라지지 않는다.
+	//
+	// TessellationDepthMinMultiple ~ TessellationDepthMaxMultiple 범위에서
+	// 깊이 신뢰도를 smoothstep으로 판정한다.
+	// 이 범위보다 낮은 배율 = 테셀레이션(억제), 높은 배율 = 진짜 특징(유지).
+	const float DepthThresholdMultiple = DepthRelativeDelta / max(DepthOutlineThreshold, 1e-5f);
+	const float DepthFeatureConfidence = smoothstep(
+		TessellationDepthMinMultiple,
+		max(TessellationDepthMaxMultiple, TessellationDepthMinMultiple + 0.01f),
+		DepthThresholdMultiple);
+	const float NormalFeatureConfidence = saturate(RawNormalEdge / max(NormalEdgeThreshold, 1e-5f));
+	const float EdgeFeatureConfidence = saturate(max(DepthFeatureConfidence, NormalFeatureConfidence));
+	const float TessellationEdgeRisk = (1.0f - EdgeFeatureConfidence) * (1.0f - SkyEdgeSuppression);
+
+	// -------------------------------------------------------------------------
+	// 2. 거리 기반 보조 신호 계산
+	// -------------------------------------------------------------------------
+	const float HazeT = saturate((LinearDepth - HazeStartDistance) / max(HazeEndDistance - HazeStartDistance, 1.0f));
+	const float HazeAmount = HazeT * saturate(HazeIntensity);
+	const float PainterlyDistanceT = saturate((LinearDepth - PainterlyStartDistance) / max(PainterlyEndDistance - PainterlyStartDistance, 1.0f));
+	const float SilhouetteMask = saturate(pow(saturate(RawDepthEdge), 0.78f) * max(SilhouetteBoost, 0.0f));
+	const float CreaseDistanceFade = lerp(1.0f, 0.58f, PainterlyDistanceT);
+	const float CreaseMask = saturate(pow(saturate(RawNormalEdge), 1.05f) * max(CreaseBoost, 0.0f)) * CreaseDistanceFade;
+	const float EdgeMask = saturate(max(SilhouetteMask, CreaseMask));
+	const float BroadSurfaceLumaDelta = ComputeNeighborhoodLumaDelta(UV, PixelStep * 1.35f);
+	const float BroadLightingProtection = (1.0f - smoothstep(0.030f, 0.110f, BroadSurfaceLumaDelta)) * (1.0f - EdgeMask);
+
+
+	// -------------------------------------------------------------------------
+	// 3. 하이라이트 보강
+	// -------------------------------------------------------------------------
+	const float HighlightLuma = ComputePerceptualLuma(Color);
+	const float HighlightMask = smoothstep(
+		HighlightThreshold,
+		min(HighlightThreshold + 0.18f, 0.995f),
+		HighlightLuma);
+	const float EffectiveHighlightMask = HighlightMask * lerp(1.0f, 0.42f, BroadLightingProtection);
+	Color += EffectiveHighlightMask * HighlightIntensity * (Color * 0.04f + CoolTint * 0.02f);
+
+	// -------------------------------------------------------------------------
+	// 4. 전역 색 보정, 단 그림자와 캐릭터는 보호
+	// -------------------------------------------------------------------------
+	const float3 HighlightedColor = Color;
+	const float ShadowProtectionMask = ComputeShadowProtectionMask(HighlightedColor);
+	const float ShadowTintFactor = lerp(1.0f, 1.0f - saturate(ShadowTintSuppression), ShadowProtectionMask);
+
+	const float EffectiveDesaturation = DesaturationAmount
+		* ShadowTintFactor
+		* lerp(1.0f, InteriorDesaturationMultiplier, EffectiveInteriorBlend);
+
+	const float EffectiveColorShift = ColorShiftStrength
+		* ShadowTintFactor
+		* lerp(1.0f, InteriorColorShiftMultiplier, EffectiveInteriorBlend);
+
+	const float3 GradedColor = ApplyStylizedGrading(Color, EffectiveDesaturation, EffectiveColorShift);
+	const float GradingBlend = lerp(1.0f, 1.0f - saturate(CharacterGradingSuppression), CharacterMask);
+	Color = lerp(HighlightedColor, GradedColor, GradingBlend);
+
+	// -------------------------------------------------------------------------
+	// 4.5. 유사 밝기 소프트 그루핑
+	// -------------------------------------------------------------------------
+	// 인접 픽셀과 perceptual 휘도가 비슷하면 이웃 평균 방향으로 살짝 당긴다.
+	// 폴리곤마다 미세하게 달라지는 조명/반사값을 부드럽게 묶어주는 역할이다.
+	// 밝기 차이가 큰 영역(하이라이트↔그림자 경계, 실루엣)은 EdgeMask로 보호된다.
+	// 캐릭터 픽셀은 그루핑 면제한다.
+	if (SoftLumaGroupStrength > 0.0f)
+	{
+		const float3 GroupNeighborAvg = SampleSceneColorNeighborhoodAverage(UV, PixelStep * 2.0f);
+		const float GroupCenterLuma  = ComputePerceptualLuma(Color);
+		const float GroupNeighborLuma = ComputePerceptualLuma(GroupNeighborAvg);
+		const float LumaSimilarity = saturate(
+			1.0f - abs(GroupCenterLuma - GroupNeighborLuma) / max(SoftLumaGroupRange, 1e-5f));
+		// 엣지 영역(EdgeMask가 높을수록)에서는 그루핑을 줄여 경계를 보존한다.
+		const float GroupEdgeSafety = saturate(1.0f - EdgeMask * 2.0f);
+		const float GroupBlend = LumaSimilarity
+			* saturate(SoftLumaGroupStrength)
+			* GroupEdgeSafety
+			* (1.0f - CharacterMask);
+		Color = lerp(Color, GroupNeighborAvg, GroupBlend);
+	}
+
+	// -------------------------------------------------------------------------
+	// 5. 원거리 배경 painterly 단순화
+	// -------------------------------------------------------------------------
+	const float BackgroundPainterlyMask = saturate(
+		PainterlyBlend
+		* PainterlyDistanceT
+		* (1.0f - CharacterMask)
+		* lerp(1.0f, 0.85f, EffectiveInteriorBlend));
+	const float BrightRegionProtection = smoothstep(0.55f, 0.84f, ComputePerceptualLuma(Color));
+	const float EffectivePainterlyMask = BackgroundPainterlyMask
+		* lerp(1.0f, 0.50f, BrightRegionProtection)
+		* lerp(1.0f, 0.35f, BroadLightingProtection);
+
+	if (EffectivePainterlyMask > 0.0f)
+	{
+		const float2 PainterlyStep = PixelStep * lerp(1.85f, 2.40f, PainterlyDistanceT);
+		const float3 NeighborhoodAverage = SampleSceneColorNeighborhoodAverage(UV, PainterlyStep);
+		const float EffectivePainterlyDesaturation = PainterlyDesaturation
+			* lerp(1.0f, 0.75f, EffectiveInteriorBlend)
+			* lerp(1.0f, 0.72f, BrightRegionProtection)
+			* lerp(1.0f, 0.82f, BroadLightingProtection);
+		const float EffectivePainterlyValueStepStrength = PainterlyValueStepStrength
+			* lerp(1.0f, 0.85f, EffectiveInteriorBlend)
+			* lerp(1.0f, 0.25f, BrightRegionProtection)
+			* lerp(1.0f, 0.12f, BroadLightingProtection);
+
+		const float3 PainterlyColor = TSE_BuildPainterlyBackgroundColor(
+			Color,
+			NeighborhoodAverage,
+			EffectivePainterlyDesaturation,
+			EffectivePainterlyValueStepStrength,
+			PainterlyValueStepCount);
+
+		const float3 PainterlyComposedColor = ApplyContrastAroundMidGray(PainterlyColor, lerp(1.0f, 1.02f, EffectivePainterlyMask));
+		Color = lerp(Color, PainterlyComposedColor, EffectivePainterlyMask);
+	}
+
+	// -------------------------------------------------------------------------
+	// 6. 그림자/캐릭터/실내를 보호하는 거리 haze
+	// -------------------------------------------------------------------------
+	const float HazeTintFactor = HazeTintStrength
+		* lerp(1.0f, 1.0f - saturate(ShadowTintSuppression), ShadowProtectionMask)
+		* lerp(1.0f, InteriorHazeTintMultiplier, EffectiveInteriorBlend);
+
+	const float3 NeutralHazeColor = BuildNeutralHazeColor(Color);
+	const float CoolHazeBlend = saturate(
+		HazeTintFactor
+		* (1.0f - ShadowProtectionMask)
+		* lerp(1.0f, 0.50f, EffectiveInteriorBlend));
+
+	const float3 HazeColor = lerp(NeutralHazeColor, CoolTint, CoolHazeBlend);
+	const float ShadowHazeFactor = lerp(1.0f, ShadowHazeMultiplier, ShadowProtectionMask);
+
+	const float EffectiveHazeAmount = HazeAmount
+		* lerp(1.0f, CharacterHazeMultiplier, CharacterMask)
+		* ShadowHazeFactor
+		* lerp(1.0f, InteriorHazeMultiplier, EffectiveInteriorBlend);
+
+	Color = lerp(Color, HazeColor, EffectiveHazeAmount * 0.52f);
+
+	// -------------------------------------------------------------------------
+	// 7. 로컬 색 기반 외곽선 강화
+	// -------------------------------------------------------------------------
+	const float OutlineStrength = saturate(OutlineOpacity);
+	const float EffectiveEdgeMultiplier = lerp(1.0f, CharacterEdgeMultiplier, CharacterMask);
+
+	// 매끄러운 표면(실린더, 구 등)의 폴리곤 테셀레이션 경계선을 억제한다.
+	// TessellationEdgeRisk: 약한 깊이 엣지 + 노멀 미일치 → 테셀레이션 의심.
+	// BroadLumaDelta 기반이 아니므로 폴리곤 면마다 억제 강도가 달라지지 않는다.
+	//
+	// 진짜 실루엣(물체 경계 vs 배경): DepthThresholdMultiple이 수백~수천 배 →
+	//   DepthFeatureConfidence = 1.0 → TessellationEdgeRisk = 0 → 억제 없음 (보존)
+	// 테셀레이션 엣지: DepthThresholdMultiple이 3~5배 →
+	//   DepthFeatureConfidence ≈ 0 → TessellationEdgeRisk ≈ 1.0 → 완전 억제 가능
+	//
+	// 기존의 * 0.50f 캡 제거: 진짜 실루엣은 TessellationEdgeRisk = 0으로
+	// 자연스럽게 보호되므로 캡 없이 전체 억제를 허용한다.
+	const float SmoothnessOutlineSuppression = TessellationEdgeRisk * saturate(SmoothSurfaceEdgeSuppression);
+	const float EffectiveSilhouetteMask = saturate(SilhouetteMask * EffectiveEdgeMultiplier
+		* (1.0f - SmoothnessOutlineSuppression));
+	const float EffectiveCreaseMask = saturate(CreaseMask * EffectiveEdgeMultiplier
+		* (1.0f - SmoothnessOutlineSuppression));
+	const float3 PerceptualEdgeColor = ToPerceptualColor(Color);
+	const float EdgeLuma = dot(PerceptualEdgeColor, float3(0.299f, 0.587f, 0.114f));
+	const float3 NeutralEdgeCore = EdgeLuma.xxx * lerp(0.12f, 0.20f, saturate(PainterlyDistanceT + EffectiveHazeAmount));
+	const float3 CreaseEdgeColor = max(lerp(Color * 0.70f, NeutralEdgeCore, 0.35f), 0.0f.xxx);
+	const float3 SilhouetteEdgeColor = max(lerp(Color * 0.46f, NeutralEdgeCore, 0.78f), 0.0f.xxx);
+
+	Color = lerp(Color, CreaseEdgeColor, EffectiveCreaseMask * OutlineStrength * 0.68f);
+	Color = lerp(Color, SilhouetteEdgeColor, EffectiveSilhouetteMask * OutlineStrength);
+	Color = ApplyContrastAroundMidGray(Color, lerp(1.0f, 1.02f, saturate(EdgeMask * 0.18f)));
+
+	// -------------------------------------------------------------------------
+	// 8. 최종 콘트라스트 보정
+	// -------------------------------------------------------------------------
+	const float EffectiveContrast = lerp(1.0f, max(CharacterContrast, 0.0f), CharacterMask)
+		* lerp(1.0f, max(InteriorContrast, 0.0f), EffectiveInteriorBlend);
+
+	Color = ApplyContrastAroundMidGray(Color, EffectiveContrast);
+
+	// -------------------------------------------------------------------------
+	// 9. 디버그 오버레이
+	// -------------------------------------------------------------------------
+	if (DebugInteriorBlend > 0.5f)
+	{
+		const float3 DebugColor = lerp(float3(0.90f, 0.12f, 0.12f), float3(0.10f, 0.90f, 0.25f), EffectiveInteriorBlend);
+		Color = lerp(Color, DebugColor, 0.75f);
+	}
+
+	// AfterDOF 단계의 SceneColor는 아직 HDR 범위이므로 상한을 1로 잘라버리면
+	// 톤매퍼가 처리해야 할 highlight rolloff가 사라지고, 하늘/반사/넓은 조명면에
+	// 눈에 띄는 경계가 생긴다. 음수만 막고 HDR 값은 유지해서 다음 단계로 넘긴다.
+	OutColor = float4(max(Color, 0.0f.xxx), SceneSample.a);
+}
