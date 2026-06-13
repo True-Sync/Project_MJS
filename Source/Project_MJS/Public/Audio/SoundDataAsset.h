@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
@@ -11,15 +11,21 @@ USTRUCT(BlueprintType)
 struct FMusicEvents
 {
 	GENERATED_BODY()
-	
-	UPROPERTY(EditDefaultsOnly, BLueprintReadOnly, Category = "FMOD|Music")
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Music")
 	TObjectPtr<UFMODEvent> GameplayBGM = nullptr;
-	
-	UPROPERTY(EditDefaultsOnly, BLueprintReadOnly, Category = "FMOD|Music")
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Music")
 	TObjectPtr<UFMODEvent> BattleBGM = nullptr;
-	
-	UPROPERTY(EditDefaultsOnly, BLueprintReadOnly, Category = "FMOD|Music")
-	TObjectPtr<UFMODEvent> MusicBGM = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Music")
+	TObjectPtr<UFMODEvent> BossBGM = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Music")
+	TObjectPtr<UFMODEvent> VictoryBGM = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Music")
+	TObjectPtr<UFMODEvent> DeathBGM = nullptr;
 };
 
 USTRUCT(BlueprintType)
@@ -44,50 +50,61 @@ USTRUCT(BlueprintType)
 struct FPlayerSoundEvents
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> AttackSwing = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> AttackHit = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> Dash = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> SkillStart = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> SkillLoop = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
 	TObjectPtr<UFMODEvent> SkillEnd = nullptr;
-};
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
+	TObjectPtr<UFMODEvent> Footstep = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Player")
+	TObjectPtr<UFMODEvent> Land = nullptr;
+};
 
 USTRUCT(BlueprintType)
 struct FFmodBuses
 {
 	GENERATED_BODY()
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
 	TObjectPtr<UFMODBus> Master = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
 	TObjectPtr<UFMODBus> BGM = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
 	TObjectPtr<UFMODBus> SFX = nullptr;
-	
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
 	TObjectPtr<UFMODBus> UI = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
+	TObjectPtr<UFMODBus> Voice = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Bus")
+	TObjectPtr<UFMODBus> Ambience = nullptr;
 };
 
 UCLASS(BlueprintType)
 class PROJECT_MJS_API USoundDataAsset : public UPrimaryDataAsset
 {
 	GENERATED_BODY()
-	
+
 public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD")
 	FMusicEvents Music;
