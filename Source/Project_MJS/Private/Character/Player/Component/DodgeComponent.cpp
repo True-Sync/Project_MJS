@@ -1,5 +1,7 @@
 #include "Character/Player/Component/DodgeComponent.h"
 
+#include "Animation/AnimInstance.h"
+#include "Character/Player/CPlayerCharacter.h"
 #include "GameFramework/Character.h"
 
 UDodgeComponent::UDodgeComponent()
@@ -13,29 +15,65 @@ void UDodgeComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
-bool UDodgeComponent::RequestDodge()
+void UDodgeComponent::RequestDodge()
 {
-	if (!DodgeMontage)
+	if (bIsDodging)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: DodgeMontage is not assigned on %s."), *GetNameSafe(this));
-		return false;
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge rejected: already dodging."));
+		return;
 	}
 
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (!OwnerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Owner is not ACharacter."));
-		return false;
+		return;
 	}
 
-	const float Duration = OwnerCharacter->PlayAnimMontage(DodgeMontage);
+	FVector DodgeDirection;
+	const bool bHasMoveInput = Cast<ACPlayerCharacter>(OwnerCharacter) && Cast<ACPlayerCharacter>(OwnerCharacter)->GetLastMoveWorldDirection(DodgeDirection);
+	UAnimMontage* MontageToPlay = bHasMoveInput ? DefaultDodgeMontage.Get() : BackStepDodgeMontage.Get();
+	if (!MontageToPlay)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: dodge montage is not assigned on %s."), *GetNameSafe(this));
+		return;
+	}
+
+	if (bHasMoveInput)
+	{
+		OwnerCharacter->SetActorRotation(DodgeDirection.Rotation());
+	}
+
+	USkeletalMeshComponent* MeshComponent = OwnerCharacter->GetMesh();
+	UAnimInstance* AnimInstance = MeshComponent ? MeshComponent->GetAnimInstance() : nullptr;
+	if (!AnimInstance)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: AnimInstance is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
+		return;
+	}
+
+	const float Duration = AnimInstance->Montage_Play(MontageToPlay);
 	if (Duration <= 0.0f)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(DodgeMontage));
-		return false;
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(MontageToPlay));
+		return;
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("RequestDodge succeeded: Montage=%s Duration=%.2f"), *GetNameSafe(DodgeMontage), Duration);
-	return true;
+	FOnMontageEnded MontageEndedDelegate;
+	MontageEndedDelegate.BindUObject(this, &UDodgeComponent::OnDodgeMontageEnded);
+	AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, MontageToPlay);
+	
+	ActiveDodgeMontage = MontageToPlay;
+	bIsDodging = true;
 }
 
+void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
+{
+	if (Montage != ActiveDodgeMontage)
+	{
+		return;
+	}
+
+	bIsDodging = false;
+	ActiveDodgeMontage = nullptr;
+}

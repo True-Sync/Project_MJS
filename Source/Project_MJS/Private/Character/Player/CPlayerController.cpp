@@ -50,6 +50,7 @@ void ACPlayerController::SetupInputComponent()
 	if (IA_Move)
 	{
 		EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &ACPlayerController::OnMoveInput);
+		EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Completed, this, &ACPlayerController::OnMoveInput);
 	}
 	
 	if (IA_Look)
@@ -141,28 +142,25 @@ void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnDodgeInput()
 {
-	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	if (!PlayerCharacter)
 	{
-		if (!PlayerCharacter->RequestDodge())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput: Dodge request was rejected."));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
 		return;
 	}
-
-	UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
+	
+	PlayerCharacter->RequestDodge();
 }
 
 void ACPlayerController::OnAttackInput()
 {
-	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	
+	if (!PlayerCharacter)
 	{
-		if (!PlayerCharacter->RequestAttack())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("OnAttackInput: Attack request was rejected."));
-		}
+		UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
 		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
+	PlayerCharacter->RequestAttack();
 }

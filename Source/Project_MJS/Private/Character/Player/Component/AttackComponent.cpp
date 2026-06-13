@@ -1,6 +1,7 @@
 #include "Character/Player/Component/AttackComponent.h"
 
 #include "Animation/AnimInstance.h"
+#include "Character/Player/CPlayerCharacter.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
 #include "GameFramework/Character.h"
 
@@ -15,7 +16,7 @@ void UAttackComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
-bool UAttackComponent::RequestAttack()
+void UAttackComponent::RequestAttack()
 {
 	if (bIsAttacking)
 	{
@@ -23,14 +24,14 @@ bool UAttackComponent::RequestAttack()
 		{
 			bComboQueued = true;
 			UE_LOG(LogTemp, Log, TEXT("RequestAttack: queued next combo. WindowOpen=%s CurrentComboIndex=%d"), bCanQueueCombo ? TEXT("true") : TEXT("false"), CurrentComboIndex);
-			return true;
+			return;
 		}
 
 		UE_LOG(LogTemp, Warning, TEXT("RequestAttack rejected: already attacking and next combo does not exist. CurrentComboIndex=%d"), CurrentComboIndex);
-		return false;
+		return;
 	}
 
-	return PlayCombo(0);
+	PlayCombo(0);
 }
 
 void UAttackComponent::SetComboWindowOpen(bool bOpen)
@@ -72,6 +73,15 @@ bool UAttackComponent::PlayCombo(int32 ComboIndex)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("PlayCombo failed: AnimInstance is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
 		return false;
+	}
+
+	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter))
+	{
+		FVector AttackDirection;
+		if (PlayerCharacter->GetLastMoveWorldDirection(AttackDirection))
+		{
+			OwnerCharacter->SetActorRotation(AttackDirection.Rotation());
+		}
 	}
 
 	const float Duration = AnimInstance->Montage_Play(ComboEntry.Montage);

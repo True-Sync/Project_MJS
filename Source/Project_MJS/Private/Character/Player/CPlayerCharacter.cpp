@@ -38,36 +38,48 @@ void ACPlayerCharacter::Tick(float DeltaTime)
 void ACPlayerCharacter::Move(const FVector2D& MoveInput)
 {
 	if (MoveInput.IsNearlyZero())
+	{
+		LastMoveWorldDirection = FVector::ZeroVector;
+		bHasMoveInput = false;
 		return;
+	}
 	
 	const ACPlayerController* PlayerController = Cast<ACPlayerController>(GetController());
 	const FRotator YawRot = PlayerController ? PlayerController->GetCameraYawRotation() : FRotator(0.0f, GetControlRotation().Yaw, 0.0f);
 	
 	const FVector Forward = FRotationMatrix(YawRot).GetUnitAxis(EAxis::X);
 	const FVector Right = FRotationMatrix(YawRot).GetUnitAxis(EAxis::Y);
+	LastMoveWorldDirection = (Forward * MoveInput.Y + Right * MoveInput.X).GetSafeNormal2D();
+	bHasMoveInput = !LastMoveWorldDirection.IsNearlyZero();
 	
 	AddMovementInput(Forward, MoveInput.Y);
 	AddMovementInput(Right, MoveInput.X);
 }
 
-bool ACPlayerCharacter::RequestAttack()
+void ACPlayerCharacter::RequestAttack()
 {
-	if (AttackComponent)
+	if (!AttackComponent)
 	{
-		return AttackComponent->RequestAttack();
+		UE_LOG(LogTemp, Warning, TEXT("RequestAttack failed: AttackComponent is missing."));
+		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("RequestAttack failed: AttackComponent is missing."));
-	return false;
+	AttackComponent->RequestAttack();
 }
 
-bool ACPlayerCharacter::RequestDodge()
+void ACPlayerCharacter::RequestDodge()
 {
-	if (DodgeComponent)
+	if (!DodgeComponent)
 	{
-		return DodgeComponent->RequestDodge();
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: DodgeComponent is missing."));
+		return;
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: DodgeComponent is missing."));
-	return false;
+	DodgeComponent->RequestDodge();
+}
+
+bool ACPlayerCharacter::GetLastMoveWorldDirection(FVector& OutDirection) const
+{
+	OutDirection = LastMoveWorldDirection;
+	return bHasMoveInput;
 }
