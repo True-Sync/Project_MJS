@@ -23,13 +23,20 @@ protected:
 	
 public:
 	void Move(const FVector2D& MoveInput);
-	bool RequestAttack();
-	bool RequestDodge();
+	void RequestAttack();
+	void RequestDodge();
+	bool GetLastMoveWorldDirection(FVector& OutDirection) const;
 
 	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
 
 private:
+	UPROPERTY(Transient)
+	FVector LastMoveWorldDirection = FVector::ZeroVector;
+
+	UPROPERTY(Transient)
+	bool bHasMoveInput = false;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAttackComponent> AttackComponent;
 

@@ -13,12 +13,22 @@ class PROJECT_MJS_API UDodgeComponent : public UActorComponent
 public:	
 	UDodgeComponent();
 
-	bool RequestDodge();
-
+	void RequestDodge();
+	
 protected:
 	virtual void BeginPlay() override;
 	
 private:
+	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
-	TObjectPtr<UAnimMontage> DodgeMontage;
+	TObjectPtr<UAnimMontage> DefaultDodgeMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Montage")
+	TObjectPtr<UAnimMontage> BackStepDodgeMontage;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimMontage> ActiveDodgeMontage;
+
+	bool bIsDodging = false;
 };
