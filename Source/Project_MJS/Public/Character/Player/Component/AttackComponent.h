@@ -15,7 +15,7 @@ class PROJECT_MJS_API UAttackComponent : public UActorComponent
 public:	
 	UAttackComponent();
 
-	bool RequestAttack();
+	void RequestAttack();
 	void SetComboWindowOpen(bool bOpen);
 
 protected:
