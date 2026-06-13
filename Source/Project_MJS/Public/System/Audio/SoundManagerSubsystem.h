@@ -12,6 +12,17 @@ class UFMODAudioComponent;
 class UFMODBus;
 class USceneComponent;
 
+UENUM(BlueprintType)
+enum class ESoundBGMState : uint8
+{
+	None,
+	Exploration,
+	Combat,
+	Boss,
+	Victory,
+	Death
+};
+
 /*
   FMOD Sound 서브시스템 사용방법(펼쳐서 확인해주셔용)
 
@@ -80,6 +91,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sound|BGM")
 	void SetBGMParameter(FName ParameterName, float Value);
 
+	UFUNCTION(BlueprintCallable, Category = "Sound|BGM")
+	void SetBGMState(ESoundBGMState NewState, float Volume = 1.0f);
+
+	UFUNCTION(BlueprintPure, Category = "Sound|BGM")
+	ESoundBGMState GetBGMState() const { return CurrentBGMState; }
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|BGM")
+	void SetBGMIntensity(float Intensity);
+
 	// ======== SFX ========
 	UFUNCTION(BlueprintCallable, Category = "Sound|SFX")
 	void PlaySFX2D(UFMODEvent* Event, float Volume = 1.0f, float Cooldown = 0.0f);
@@ -98,6 +118,19 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sound|SFX")
 	void StopAttachedSFX(FName Handle);
 
+	// ======== Ambience ========
+	UFUNCTION(BlueprintCallable, Category = "Sound|Ambience")
+	void PlayAmbience(UFMODEvent* Event, float Volume = 1.0f);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Ambience")
+	void StopAmbience(bool bAllowFadeOut = true);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Ambience")
+	void PauseAmbience(bool bPaused);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Ambience")
+	void SetAmbienceParameter(FName ParameterName, float Value);
+
 	// ======== Bus / Mix ========
 	UFUNCTION(BlueprintCallable, Category = "Sound|Mix")
 	void ApplyVolumes(
@@ -111,8 +144,31 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Sound|Mix")
 	void SetSFXPaused(bool bPaused);
 
+	UFUNCTION(BlueprintCallable, Category = "Sound|Mix")
+	void LoadVolumeSettings();
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Mix")
+	void SaveVolumeSettings() const;
+
+	// ======== Pause ========
+	UFUNCTION(BlueprintCallable, Category = "Sound|Pause")
+	void ApplyPauseAudio(float PauseBGMVolume = 0.4f);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Pause")
+	void RestorePauseAudio();
+
+	// ======== Debug ========
+	UFUNCTION(BlueprintCallable, Category = "Sound|Debug")
+	void SetDebugSoundEnabled(bool bEnabled);
+
+	UFUNCTION(BlueprintCallable, Category = "Sound|Debug")
+	void DumpActiveSounds() const;
+
 private:
 	bool CanPlayEvent(UFMODEvent* Event, float Cooldown);
+	UFMODEvent* GetBGMEventForState(ESoundBGMState State) const;
+	void StartPersistentInstance(FFMODEventInstance& Instance, UFMODEvent* Event, float Volume);
+	void StopPersistentInstance(FFMODEventInstance& Instance, bool bAllowFadeOut);
 	void SetBusVolume(UFMODBus* Bus, float Volume);
 	void SetBusPaused(UFMODBus* Bus, bool bPaused);
 	void StopAllAttachedSFX();
@@ -126,9 +182,27 @@ private:
 
 	FFMODEventInstance BGMInstance;
 	bool bHasBGMInstance = false;
+	ESoundBGMState CurrentBGMState = ESoundBGMState::None;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UFMODEvent> CurrentAmbienceEvent = nullptr;
+
+	FFMODEventInstance AmbienceInstance;
+	bool bHasAmbienceInstance = false;
 
 	UPROPERTY(Transient)
 	TMap<FName, TObjectPtr<UFMODAudioComponent>> AttachedSFXMap;
 
 	TMap<TObjectKey<UFMODEvent>, float> LastPlayTimes;
+
+	float CurrentMasterVolume = 1.0f;
+	float CurrentBGMVolume = 1.0f;
+	float CurrentSFXVolume = 1.0f;
+	float CurrentUIVolume = 1.0f;
+	float CurrentVoiceVolume = 1.0f;
+	float CurrentAmbienceVolume = 1.0f;
+
+	float PrePauseBGMVolume = 1.0f;
+	bool bPauseAudioApplied = false;
+	bool bDebugSound = false;
 };

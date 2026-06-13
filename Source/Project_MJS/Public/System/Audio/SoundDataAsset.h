@@ -47,6 +47,21 @@ struct FUIEvents
 };
 
 USTRUCT(BlueprintType)
+struct FAmbienceEvents
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Ambience")
+	TObjectPtr<UFMODEvent> DefaultAmbience = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Ambience")
+	TObjectPtr<UFMODEvent> Wind = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD|Ambience")
+	TObjectPtr<UFMODEvent> Rain = nullptr;
+};
+
+USTRUCT(BlueprintType)
 struct FPlayerSoundEvents
 {
 	GENERATED_BODY()
@@ -114,6 +129,9 @@ public:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD")
 	FUIEvents UI;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD")
+	FAmbienceEvents Ambience;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "FMOD")
 	FFmodBuses Buses;
