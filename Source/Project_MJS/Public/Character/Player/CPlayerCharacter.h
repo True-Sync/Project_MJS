@@ -6,6 +6,8 @@
 #include "GameFramework/Character.h"
 #include "CPlayerCharacter.generated.h"
 
+class UAttackComponent;
+class UDodgeComponent;
 
 UCLASS()
 class PROJECT_MJS_API ACPlayerCharacter : public ACharacter
@@ -21,4 +23,16 @@ protected:
 	
 public:
 	void Move(const FVector2D& MoveInput);
+	bool RequestAttack();
+	bool RequestDodge();
+
+	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
+	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
+
+private:
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UAttackComponent> AttackComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UDodgeComponent> DodgeComponent;
 };

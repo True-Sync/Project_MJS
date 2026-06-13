@@ -23,10 +23,15 @@ public:
 	FRotator GetCameraYawRotation() const;
 
 private:
+	// 초기 카메라 세팅 함수
+	void InitializeCameraRig();
+	
 	void OnMoveInput(const FInputActionValue& Value);
 	void OnLookInput(const FInputActionValue& Value);
-	void InitializeCameraRig();
+	void OnDodgeInput();
+	void OnAttackInput();
 
+	// ===== Input =====
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputMappingContext> DefaultInputMappingContext;
 	
@@ -35,7 +40,14 @@ private:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Look;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> IA_Attack;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> IA_Dodge;
 
+	// ===== 카메라 =====
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
 	TSubclassOf<ACameraRigActor> CameraRigClass;
 

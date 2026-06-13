@@ -36,6 +36,7 @@ private:
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TWeakObjectPtr<USpringArmComponent> SpringArm;
 
+	// ===== 추적 관련 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Follow")
 	FVector TargetOffset = FVector(0.0f, 0.0f, 85.0f);
 
@@ -45,6 +46,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera|Follow", meta = (ClampMin = "1.0"))
 	float RotationInterpSpeed = 20.0f;
 
+	// ===== 회전 관련 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Rotation", meta = (ClampMin = "0.01"))
 	float YawSensitivity = 1.0f;
 
@@ -57,6 +59,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera|Rotation", meta = (ClampMin = "-89.0", ClampMax = "89.0"))
 	float MaxPitch = 35.0f;
 
+	// ===== 줌 관련 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom", meta = (ClampMin = "1.0"))
 	float ArmLengthInterpSpeed = 8.0f;
 

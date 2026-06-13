@@ -43,6 +43,7 @@ void ACPlayerController::SetupInputComponent()
 	UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(InputComponent);
 	if (!EnhancedInputComponent)
 	{
+		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent failed: InputComponent is not UEnhancedInputComponent."));
 		return;
 	}
 
@@ -55,32 +56,25 @@ void ACPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &ACPlayerController::OnLookInput);
 	}
+	
+	if (IA_Attack)
+	{
+		EnhancedInputComponent->BindAction(IA_Attack, ETriggerEvent::Started, this, &ACPlayerController::OnAttackInput);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_Attack is not assigned."));
+	}
+	
+	if (IA_Dodge)
+	{
+		EnhancedInputComponent->BindAction(IA_Dodge, ETriggerEvent::Started, this, &ACPlayerController::OnDodgeInput);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_Dodge is not assigned."));
+	}
 }	
-
-void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
-{
-	const FVector2D MoveInput = Value.Get<FVector2D>();
-
-	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
-	{
-		PlayerCharacter->Move(MoveInput);
-	}
-}
-
-void ACPlayerController::OnLookInput(const FInputActionValue& Value)
-{
-	const FVector2D LookInput = Value.Get<FVector2D>();
-
-	if (LookInput.IsNearlyZero())
-	{
-		return;
-	}
-
-	if (CameraRig)
-	{
-		CameraRig->AddLookInput(LookInput);
-	}
-}
 
 FRotator ACPlayerController::GetCameraYawRotation() const
 {
@@ -118,4 +112,57 @@ void ACPlayerController::InitializeCameraRig()
 		CameraRig->SetCameraTarget(GetPawn());
 		SetViewTarget(CameraRig);
 	}
+}
+
+void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
+{
+	const FVector2D MoveInput = Value.Get<FVector2D>();
+
+	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	{
+		PlayerCharacter->Move(MoveInput);
+	}
+}
+
+void ACPlayerController::OnLookInput(const FInputActionValue& Value)
+{
+	const FVector2D LookInput = Value.Get<FVector2D>();
+
+	if (LookInput.IsNearlyZero())
+	{
+		return;
+	}
+
+	if (CameraRig)
+	{
+		CameraRig->AddLookInput(LookInput);
+	}
+}
+
+void ACPlayerController::OnDodgeInput()
+{
+	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	{
+		if (!PlayerCharacter->RequestDodge())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput: Dodge request was rejected."));
+		}
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
+}
+
+void ACPlayerController::OnAttackInput()
+{
+	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	{
+		if (!PlayerCharacter->RequestAttack())
+		{
+			UE_LOG(LogTemp, Warning, TEXT("OnAttackInput: Attack request was rejected."));
+		}
+		return;
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
 }

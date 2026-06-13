@@ -1,11 +1,16 @@
 #include "Character/Player/CPlayerCharacter.h"
 
 #include "Character/Player/CPlayerController.h"
+#include "Character/Player/Component/AttackComponent.h"
+#include "Character/Player/Component/DodgeComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 ACPlayerCharacter::ACPlayerCharacter()
 {
 	PrimaryActorTick.bCanEverTick = false;
+
+	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -43,4 +48,26 @@ void ACPlayerCharacter::Move(const FVector2D& MoveInput)
 	
 	AddMovementInput(Forward, MoveInput.Y);
 	AddMovementInput(Right, MoveInput.X);
+}
+
+bool ACPlayerCharacter::RequestAttack()
+{
+	if (AttackComponent)
+	{
+		return AttackComponent->RequestAttack();
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("RequestAttack failed: AttackComponent is missing."));
+	return false;
+}
+
+bool ACPlayerCharacter::RequestDodge()
+{
+	if (DodgeComponent)
+	{
+		return DodgeComponent->RequestDodge();
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: DodgeComponent is missing."));
+	return false;
 }
