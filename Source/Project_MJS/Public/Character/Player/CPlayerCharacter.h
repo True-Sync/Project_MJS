@@ -7,6 +7,8 @@
 #include "CPlayerCharacter.generated.h"
 
 class UAttackComponent;
+class UCinematicActionComponent;
+class UCinematicParticipantComponent;
 class UDodgeComponent;
 
 UCLASS()
@@ -29,6 +31,8 @@ public:
 
 	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
+	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
+	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
 
 private:
 	UPROPERTY(Transient)
@@ -42,4 +46,10 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UDodgeComponent> DodgeComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCinematicActionComponent> CinematicActionComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UCinematicParticipantComponent> CinematicParticipantComponent;
 };

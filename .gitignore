@@ -50,6 +50,7 @@ SourceArt/**/*.tga
 # Binary Files
 Binaries/*
 Plugins/**/Binaries/*
+Plugins/**/Binaries/**/*.pdb
 
 # FMOD Studio requires vendor runtime/link libraries to build on every machine.
 # Keep only the SDK redistributables; generated UnrealEditor plugin DLL/PDB files
@@ -66,6 +67,7 @@ Plugins/**/Binaries/*
 !Plugins/FMODStudio/Binaries/Win64/fmodstudioL_vc.lib
 !Plugins/FMODStudio/Binaries/Win64/fmod_haptics.dll
 !Plugins/FMODStudio/Binaries/Win64/resonanceaudio.dll
+
 
 # Builds
 Build/*
@@ -90,3 +92,5 @@ Plugins/**/Intermediate/*
 
 # Cache files for the editor to use
 DerivedDataCache/*
+Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudioEditor.pdb
+Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudio.pdb

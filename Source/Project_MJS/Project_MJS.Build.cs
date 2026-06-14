@@ -15,7 +15,13 @@ public class Project_MJS : ModuleRules
 			"Engine",
 			"InputCore",
 			"EnhancedInput",
-			"FMODStudio"
+			"FMODStudio",
+			"LevelSequence",
+			"MovieScene",
+			"MovieSceneTracks",
+			"CinematicCamera",
+			"Niagara",
+			"AIModule"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
