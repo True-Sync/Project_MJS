@@ -51,6 +51,22 @@ SourceArt/**/*.tga
 Binaries/*
 Plugins/**/Binaries/*
 
+# FMOD Studio requires vendor runtime/link libraries to build on every machine.
+# Keep only the SDK redistributables; generated UnrealEditor plugin DLL/PDB files
+# remain ignored by the broader Binaries rules above.
+!Plugins/FMODStudio/Binaries/
+!Plugins/FMODStudio/Binaries/Win64/
+!Plugins/FMODStudio/Binaries/Win64/fmod.dll
+!Plugins/FMODStudio/Binaries/Win64/fmodL.dll
+!Plugins/FMODStudio/Binaries/Win64/fmod_vc.lib
+!Plugins/FMODStudio/Binaries/Win64/fmodL_vc.lib
+!Plugins/FMODStudio/Binaries/Win64/fmodstudio.dll
+!Plugins/FMODStudio/Binaries/Win64/fmodstudioL.dll
+!Plugins/FMODStudio/Binaries/Win64/fmodstudio_vc.lib
+!Plugins/FMODStudio/Binaries/Win64/fmodstudioL_vc.lib
+!Plugins/FMODStudio/Binaries/Win64/fmod_haptics.dll
+!Plugins/FMODStudio/Binaries/Win64/resonanceaudio.dll
+
 # Builds
 Build/*
 
