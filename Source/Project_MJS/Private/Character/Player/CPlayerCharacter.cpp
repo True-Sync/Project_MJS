@@ -3,6 +3,8 @@
 #include "Character/Player/CPlayerController.h"
 #include "Character/Player/Component/AttackComponent.h"
 #include "Character/Player/Component/DodgeComponent.h"
+#include "Cinematic/CinematicActionComponent.h"
+#include "Cinematic/CinematicParticipantComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
 ACPlayerCharacter::ACPlayerCharacter()
@@ -11,6 +13,8 @@ ACPlayerCharacter::ACPlayerCharacter()
 
 	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
 	DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
+	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
+	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
 
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
