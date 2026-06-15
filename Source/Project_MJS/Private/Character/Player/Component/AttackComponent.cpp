@@ -2,6 +2,8 @@
 
 #include "Animation/AnimInstance.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Character/Player/Component/DodgeComponent.h"
+#include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
 #include "GameFramework/Character.h"
 
@@ -18,6 +20,16 @@ void UAttackComponent::BeginPlay()
 
 void UAttackComponent::RequestAttack()
 {
+	if (const ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetOwner()))
+	{
+		const UDodgeComponent* DodgeComponent = PlayerCharacter->GetDodgeComponent();
+		if (DodgeComponent && DodgeComponent->IsDodging())
+		{
+			UE_LOG(LogTemp, Log, TEXT("RequestAttack rejected: cannot attack while dodging."));
+			return;
+		}
+	}
+
 	if (bIsAttacking)
 	{
 		if (HasNextCombo())

@@ -3,19 +3,22 @@
 #include "Character/Player/CPlayerController.h"
 #include "Character/Player/Component/AttackComponent.h"
 #include "Character/Player/Component/DodgeComponent.h"
+#include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicParticipantComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
-ACPlayerCharacter::ACPlayerCharacter()
+ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer)
+	: Super(ObjectInitializer.SetDefaultSubobjectClass<UPlayerMovementComponent>(ACharacter::CharacterMovementComponentName))
 {
 	PrimaryActorTick.bCanEverTick = false;
-
-	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	
+	PlayerMovementComponent = Cast<UPlayerMovementComponent>(GetCharacterMovement());
 	DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
+	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
 	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
-
+	
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
@@ -71,15 +74,15 @@ void ACPlayerCharacter::RequestAttack()
 	AttackComponent->RequestAttack();
 }
 
-void ACPlayerCharacter::RequestDodge()
+bool ACPlayerCharacter::RequestDodge()
 {
 	if (!DodgeComponent)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: DodgeComponent is missing."));
-		return;
+		return false;
 	}
 
-	DodgeComponent->RequestDodge();
+	return DodgeComponent->RequestDodge();
 }
 
 bool ACPlayerCharacter::GetLastMoveWorldDirection(FVector& OutDirection) const

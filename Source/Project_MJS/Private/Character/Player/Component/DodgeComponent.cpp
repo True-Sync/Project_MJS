@@ -15,19 +15,19 @@ void UDodgeComponent::BeginPlay()
 	Super::BeginPlay();
 }
 
-void UDodgeComponent::RequestDodge()
+bool UDodgeComponent::RequestDodge()
 {
 	if (bIsDodging)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge rejected: already dodging."));
-		return;
+		return false;
 	}
 
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (!OwnerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Owner is not ACharacter."));
-		return;
+		return false;
 	}
 
 	FVector DodgeDirection;
@@ -36,7 +36,7 @@ void UDodgeComponent::RequestDodge()
 	if (!MontageToPlay)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: dodge montage is not assigned on %s."), *GetNameSafe(this));
-		return;
+		return false;
 	}
 
 	if (bHasMoveInput)
@@ -49,14 +49,14 @@ void UDodgeComponent::RequestDodge()
 	if (!AnimInstance)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: AnimInstance is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
-		return;
+		return false;
 	}
 
 	const float Duration = AnimInstance->Montage_Play(MontageToPlay);
 	if (Duration <= 0.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(MontageToPlay));
-		return;
+		return false;
 	}
 
 	FOnMontageEnded MontageEndedDelegate;
@@ -65,6 +65,7 @@ void UDodgeComponent::RequestDodge()
 	
 	ActiveDodgeMontage = MontageToPlay;
 	bIsDodging = true;
+	return true;
 }
 
 void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)

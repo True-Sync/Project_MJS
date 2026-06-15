@@ -13,7 +13,8 @@ class PROJECT_MJS_API UDodgeComponent : public UActorComponent
 public:	
 	UDodgeComponent();
 
-	void RequestDodge();
+	bool RequestDodge();
+	bool IsDodging() const { return bIsDodging; }
 	
 protected:
 	virtual void BeginPlay() override;
