@@ -2,6 +2,7 @@
 
 #include "Camera/CameraMoveComponent.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/CameraDirectingComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
 ACameraRigActor::ACameraRigActor()
@@ -28,6 +29,9 @@ ACameraRigActor::ACameraRigActor()
 
 	CameraMoveComp = CreateDefaultSubobject<UCameraMoveComponent>(TEXT("CameraMove"));
 	CameraMoveComp->Initialize(SpringArm);
+	
+	CameraDirectingComp = CreateDefaultSubobject<UCameraDirectingComponent>(TEXT("CameraDirecting"));
+	CameraDirectingComp->Initialize(Camera);
 }
 
 void ACameraRigActor::BeginPlay()
