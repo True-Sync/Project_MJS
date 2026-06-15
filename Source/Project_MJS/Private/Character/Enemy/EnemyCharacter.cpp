@@ -20,20 +20,18 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 	if (ActualDamage <= 0.0f) return ActualDamage;
-
-	// 1. 적 캐릭터 위치에서 공격자를 향하는 '방향 벡터' 구하기
+	
 	FVector DirectionToAttacker = FVector::ZeroVector;
 	if (DamageCauser)
 	{
 		DirectionToAttacker = (DamageCauser->GetActorLocation() - GetActorLocation()).GetSafeNormal();
 	}
-	
-	// 2. 방향 벡터를 기반으로 전후좌우 판별하기
+
+	// 피격 애니메이션 재생
 	UAnimMontage* SelectedMontage = HitMontageFront; // 기본값은 정면 피격
 
 	if (!DirectionToAttacker.IsNearlyZero())
 	{
-		// 적이 바라보는 앞(Forward)과 오른쪽(Right) 방향을 가져와 내적(Dot Product) 연산 수행
 		float ForwardDot = FVector::DotProduct(GetActorForwardVector(), DirectionToAttacker);
 		float RightDot = FVector::DotProduct(GetActorRightVector(), DirectionToAttacker);
 
@@ -60,25 +58,32 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 			}
 		}
 	}
-
-	// 3. 선택된 피격 애니메이션(몽타주) 재생
-	float RecoveryTime = 0.4f; // 기본 복구 시간
+	
+	float RecoveryTime = 0.4f;
 	if (SelectedMontage)
 	{
 		UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
 		if (AnimInstance)
 		{
 			AnimInstance->Montage_Play(SelectedMontage);
-			RecoveryTime = SelectedMontage->GetPlayLength(); // 선택된 몽타주의 길이로 복구 타이머 설정
+			RecoveryTime = SelectedMontage->GetPlayLength();
 		}
 	}
-
-	// 4. HitBack (넉백) 방향 계산 및 적용 (기존 로직 유지)
+	
+	// Hit Flash 피격시 반짝임
+	if (HitFlashMaterial && GetMesh())
+	{
+		GetMesh()->SetOverlayMaterial(HitFlashMaterial);
+		
+		GetWorldTimerManager().SetTimer(HitFlashTimerHandle, this, &AEnemyCharacter::ClearHitFlash, HitFlashDuration, false);
+	}
+	
+	// 피격 넉백 수행
 	FVector KnockbackDirection = FVector::ZeroVector;
 	if (DamageEvent.IsOfType(FPointDamageEvent::ClassID))
 	{
 		const FPointDamageEvent* PointDamageEvent = static_cast<const FPointDamageEvent*>(&DamageEvent);
-		KnockbackDirection = PointDamageEvent->ShotDirection; // 플레이어의 검/발차기 궤적이 밀어내는 방향
+		KnockbackDirection = PointDamageEvent->ShotDirection;
 	}
 	else if (DamageCauser)
 	{
@@ -97,8 +102,7 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 		KnockbackDirection.Normalize();
 
 		LaunchCharacter(KnockbackDirection * HitBackForce, true, true);
-
-		// 넉백 복구 타이머 실행
+		
 		GetWorldTimerManager().SetTimer(HitRecoveryTimerHandle, this, &AEnemyCharacter::ResetHitState, RecoveryTime, false);
 	}
 
@@ -109,5 +113,13 @@ void AEnemyCharacter::ResetHitState()
 {
 	bIsHitBacking = false;
 	
-	// TODO: 블랙보드 변수(예: bIsStunned)를 제어하거나 AI Behavior Tree를 재개하는 로직을 여기에 추가할 수 있습니다.
+	// TODO: 블랙보드 변수(예: bIsStunned)를 제어하거나 AI Behavior Tree를 재개하는 로직
+}
+
+void AEnemyCharacter::ClearHitFlash()
+{
+	if (GetMesh())
+	{
+		GetMesh()->SetOverlayMaterial(nullptr);
+	}
 }

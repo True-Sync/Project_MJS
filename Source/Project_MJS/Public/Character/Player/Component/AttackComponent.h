@@ -71,10 +71,8 @@ protected:
 	bool bIsWeaponAttacking = false;
 	bool bIsKickAttacking = false;
 	
-	// 디버그 표시 여부를 에디터에서 켜고 끌 수 있는 스위치
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Debug")
 	bool bShowDebugShape = true;
-
-	// 시각적 디버그를 그려주는 전용 함수
+	
 	void DrawDebugAttackShape(const FVector& StartPos, const FVector& EndPos, float Radius, bool bHit);
 };

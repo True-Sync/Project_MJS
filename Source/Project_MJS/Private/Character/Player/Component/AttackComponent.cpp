@@ -23,8 +23,7 @@ void UAttackComponent::BeginPlay()
 void UAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	// 매 프레임(엔진의 가장 빠른 주기)마다 판정을 실행합니다.
+	
 	if (bIsWeaponAttacking)
 	{
 		CheckWeaponTrace();
@@ -258,8 +257,7 @@ void UAttackComponent::CheckKickTrace()
 {
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (!OwnerCharacter) return;
-
-	// 캐릭터 메시에서 발차기 소켓 위치 가져오기
+	
 	FVector KickLocation = OwnerCharacter->GetMesh()->GetSocketLocation(CurrentKickSocket);
 
 	FHitResult HitResult;
@@ -269,7 +267,6 @@ void UAttackComponent::CheckKickTrace()
 	// 발 주변을 감싸는 구체 판정
 	float KickRadius = 30.0f;
 	
-	// SweepSingleByChannel을 사용하고, Start와 End에 동일한 KickLocation을 넣습니다.
 	bool bHit = GetWorld()->SweepSingleByChannel(
 		HitResult, 
 		KickLocation, // Start
@@ -291,7 +288,6 @@ void UAttackComponent::CheckKickTrace()
 			
 			AController* InstigatorController = OwnerCharacter->GetController();
 			
-			// HitActor 쪽으로 밀려나도록 방향 계산
 			FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
 
 			UGameplayStatics::ApplyPointDamage(
@@ -310,7 +306,6 @@ void UAttackComponent::CheckKickTrace()
 void UAttackComponent::DrawDebugAttackShape(const FVector& StartPos, const FVector& EndPos, float Radius, bool bHit)
 {
 #if ENABLE_DRAW_DEBUG
-	// 에디터에서 디버그 옵션을 껐다면 아무것도 그리지 않고 종료
 	if (!bShowDebugShape) return;
 
 	FColor DrawColor = bHit ? FColor::Red : FColor::Green;

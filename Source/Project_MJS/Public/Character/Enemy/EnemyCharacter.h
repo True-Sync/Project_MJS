@@ -13,8 +13,7 @@ class PROJECT_MJS_API AEnemyCharacter : public ACharacter
 
 public:
 	AEnemyCharacter();
-
-	// 언리얼 엔진 표준 데미지 시스템 오버라이드
+	
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 protected:
@@ -43,4 +42,22 @@ private:
 
 	FTimerHandle HitRecoveryTimerHandle;
 	bool bIsHitBacking = false;
+	
+protected:
+	// === 피격 피드백 (머티리얼 오버레이) ===
+	
+	// 에디터에서 할당할 하얗게 번쩍이는 머티리얼
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
+	UMaterialInterface* HitFlashMaterial;
+
+	// 번쩍임이 유지되는 시간 (보통 0.05초 ~ 0.1초가 가장 타격감이 좋습니다)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
+	float HitFlashDuration = 0.1f;
+
+private:
+	// 머티리얼 복구를 위한 타이머 핸들
+	FTimerHandle HitFlashTimerHandle;
+
+	// 번쩍임 효과를 지우는 함수
+	void ClearHitFlash();
 };
