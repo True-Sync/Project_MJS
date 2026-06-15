@@ -27,6 +27,7 @@ private:
 	void InitializeCameraRig();
 	
 	void OnMoveInput(const FInputActionValue& Value);
+	void OnJumpInput();
 	void OnLookInput(const FInputActionValue& Value);
 	void OnDodgeInput();
 	void OnAttackInput();
@@ -37,6 +38,9 @@ private:
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Move;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> IA_Jump;
 	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Look;

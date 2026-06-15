@@ -3,21 +3,23 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Cinematic/CinematicParticipant.h"
 #include "GameFramework/Character.h"
 #include "CPlayerCharacter.generated.h"
 
+class UPlayerMovementComponent;
 class UAttackComponent;
 class UCinematicActionComponent;
 class UCinematicParticipantComponent;
 class UDodgeComponent;
 
 UCLASS()
-class PROJECT_MJS_API ACPlayerCharacter : public ACharacter
+class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicParticipant
 {
 	GENERATED_BODY()
 
 public:
-	ACPlayerCharacter();
+	ACPlayerCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
 
 protected:
 	virtual void BeginPlay() override;
@@ -26,9 +28,10 @@ protected:
 public:
 	void Move(const FVector2D& MoveInput);
 	void RequestAttack();
-	void RequestDodge();
-	bool GetLastMoveWorldDirection(FVector& OutDirection) const;
+	bool RequestDodge();
 
+	// ===== Get/Setter =====
+	bool GetLastMoveWorldDirection(FVector& OutDirection) const;
 	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
 	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
@@ -41,15 +44,18 @@ private:
 	UPROPERTY(Transient)
 	bool bHasMoveInput = false;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Combat", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Movement", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UPlayerMovementComponent> PlayerMovementComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Movement", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UDodgeComponent> DodgeComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Attack", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAttackComponent> AttackComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Movement", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UDodgeComponent> DodgeComponent;
-
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicActionComponent> CinematicActionComponent;
 
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicParticipantComponent> CinematicParticipantComponent;
 };

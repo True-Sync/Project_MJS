@@ -6,6 +6,7 @@
 #include "Camera/CameraRigActor.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Character/Player/Component/PlayerMovementComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
@@ -51,6 +52,11 @@ void ACPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &ACPlayerController::OnMoveInput);
 		EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Completed, this, &ACPlayerController::OnMoveInput);
+	}
+	
+	if (IA_Jump)
+	{
+		EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &ACPlayerController::OnJumpInput);
 	}
 	
 	if (IA_Look)
@@ -119,9 +125,28 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 {
 	const FVector2D MoveInput = Value.Get<FVector2D>();
 
-	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	if (!PlayerCharacter)
 	{
-		PlayerCharacter->Move(MoveInput);
+		UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+	
+	PlayerCharacter->Move(MoveInput);
+}
+
+void ACPlayerController::OnJumpInput()
+{
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnJumpInput failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+
+	if (PlayerCharacter->CanJump())
+	{
+		PlayerCharacter->Jump();
 	}
 }
 
@@ -149,7 +174,20 @@ void ACPlayerController::OnDodgeInput()
 		return;
 	}
 	
-	PlayerCharacter->RequestDodge();
+	UPlayerMovementComponent* PlayerMovementComp = Cast<UPlayerMovementComponent>(PlayerCharacter->GetMovementComponent());
+	if (!PlayerMovementComp)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: MovementComponent is not UPlayerMovementComponent."));
+		return;
+	}
+	
+	if (PlayerMovementComp->CanDodge())
+	{
+		if (PlayerCharacter->RequestDodge())
+		{
+			PlayerMovementComp->ConsumeDodge();
+		}
+	}
 }
 
 void ACPlayerController::OnAttackInput()

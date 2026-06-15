@@ -29,7 +29,7 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
 	TObjectPtr<UComboAttackDataAsset> DA_BasicComboAttack;
-
+	
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimMontage> ActiveMontage;
 

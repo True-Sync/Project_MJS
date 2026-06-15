@@ -32,9 +32,15 @@ protected:
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation")
 	float MovementDirection = 0.f;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Animation")
+	FVector OwnerVelocity = FVector::ZeroVector;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation")
 	bool bIsInAir = false;
+	
+	UPROPERTY(BlueprintReadOnly, Category = "Animation")
+	bool bShouldMove = false;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Animation")
 	bool bIsAccelerating = false;
