@@ -6,6 +6,7 @@
 #include "Camera/CameraRigActor.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Cinematic/CinematicInputLockSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
@@ -117,6 +118,11 @@ void ACPlayerController::InitializeCameraRig()
 
 void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 {
+	if (IsCinematicMoveInputLocked())
+	{
+		return;
+	}
+
 	const FVector2D MoveInput = Value.Get<FVector2D>();
 
 	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn()))
@@ -127,6 +133,11 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 {
+	if (IsCinematicLookInputLocked())
+	{
+		return;
+	}
+
 	const FVector2D LookInput = Value.Get<FVector2D>();
 
 	if (LookInput.IsNearlyZero())
@@ -142,6 +153,11 @@ void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnDodgeInput()
 {
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
 	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
 	if (!PlayerCharacter)
 	{
@@ -154,6 +170,11 @@ void ACPlayerController::OnDodgeInput()
 
 void ACPlayerController::OnAttackInput()
 {
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
 	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
 	
 	if (!PlayerCharacter)
@@ -163,4 +184,25 @@ void ACPlayerController::OnAttackInput()
 	}
 
 	PlayerCharacter->RequestAttack();
+}
+
+bool ACPlayerController::IsCinematicMoveInputLocked() const
+{
+	const UWorld* World = GetWorld();
+	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
+	return InputLockSubsystem && InputLockSubsystem->IsMoveInputLocked(this);
+}
+
+bool ACPlayerController::IsCinematicLookInputLocked() const
+{
+	const UWorld* World = GetWorld();
+	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
+	return InputLockSubsystem && InputLockSubsystem->IsLookInputLocked(this);
+}
+
+bool ACPlayerController::IsCinematicGameplayInputLocked() const
+{
+	const UWorld* World = GetWorld();
+	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
+	return InputLockSubsystem && InputLockSubsystem->IsGameplayInputLocked(this);
 }

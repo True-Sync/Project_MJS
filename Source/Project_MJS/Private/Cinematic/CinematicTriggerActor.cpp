@@ -2,7 +2,9 @@
 
 #include "Cinematic/CinematicDirectorSubsystem.h"
 #include "Cinematic/CinematicTypes.h"
+#include "Animation/AnimInstance.h"
 #include "Components/BoxComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "LevelSequence.h"
 
 ACinematicTriggerActor::ACinematicTriggerActor()
@@ -76,6 +78,8 @@ bool ACinematicTriggerActor::ActivateCinematic(AActor* TargetActor)
 	Request.DebugDrawDuration = DebugDrawDuration;
 	Request.DebugDrawScale = DebugDrawScale;
 
+	StopTargetActiveMontages(TargetActor);
+
 	if (!DirectorSubsystem->PlayCinematic(Request))
 	{
 		return false;
@@ -130,4 +134,24 @@ bool ACinematicTriggerActor::CanTriggerFor(AActor* TargetActor) const
 	}
 
 	return true;
+}
+
+void ACinematicTriggerActor::StopTargetActiveMontages(AActor* TargetActor) const
+{
+	if (!bStopTargetMontagesOnTrigger || !TargetActor)
+	{
+		return;
+	}
+
+	TArray<USkeletalMeshComponent*> SkeletalMeshComponents;
+	TargetActor->GetComponents(SkeletalMeshComponents);
+
+	for (USkeletalMeshComponent* SkeletalMeshComponent : SkeletalMeshComponents)
+	{
+		UAnimInstance* AnimInstance = SkeletalMeshComponent ? SkeletalMeshComponent->GetAnimInstance() : nullptr;
+		if (AnimInstance)
+		{
+			AnimInstance->Montage_Stop(0.05f);
+		}
+	}
 }
