@@ -21,6 +21,7 @@ protected:
 	
 public:
 	FRotator GetCameraYawRotation() const;
+	ACameraRigActor* GetCameraRig() const { return CameraRig; }
 
 	UFUNCTION(BlueprintPure, Category = "Cinematic|Input")
 	bool IsCinematicGameplayInputLocked() const;

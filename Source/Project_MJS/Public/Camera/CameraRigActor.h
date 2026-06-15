@@ -4,6 +4,7 @@
 #include "GameFramework/Actor.h"
 #include "CameraRigActor.generated.h"
 
+class UCameraDirectingComponent;
 class UCameraComponent;
 class UCameraMoveComponent;
 class USpringArmComponent;
@@ -18,6 +19,7 @@ public:
 
 	virtual void BeginPlay() override;
 
+	// ===== Component =====
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
 
@@ -27,6 +29,9 @@ public:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraMoveComponent> CameraMoveComp;
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
+	TObjectPtr<UCameraDirectingComponent> CameraDirectingComp;
+	
 	void SetCameraTarget(AActor* NewTarget);
 	AActor* GetCurrentTarget() const;
 
@@ -35,4 +40,5 @@ public:
 	void ResetZoom();
 	void SetArmLength(float NewArmLength, bool bApplyImmediately = true);
 	FRotator GetCameraYawRotation() const;
+	UCameraDirectingComponent* GetCameraDirectingComponent() const { return CameraDirectingComp; }
 };
