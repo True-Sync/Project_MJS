@@ -229,7 +229,11 @@ void UAttackComponent::CheckWeaponTrace()
 				
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
 				AController* InstigatorController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
-				FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+				//방사형 넉백
+				//FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+				
+				//정면 방향 넉백(플레이어가 바라보는 방향)
+				FVector ShotDirection = OwnerPawn->GetActorForwardVector();
 
 				UGameplayStatics::ApplyPointDamage(
 					HitActor, 30.0f, ShotDirection, HitResult, InstigatorController, GetOwner(), UDamageType::StaticClass()
@@ -302,8 +306,11 @@ void UAttackComponent::CheckKickTrace()
 			
 			AController* InstigatorController = OwnerCharacter->GetController();
 			
-			FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
-
+			//방사형 넉백
+			//FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+			//정면 방향 넉백(플레이어가 바라보는 방향)
+			FVector ShotDirection = OwnerCharacter->GetActorForwardVector();
+				
 			UGameplayStatics::ApplyPointDamage(
 				HitActor, 
 				20.0f, 
