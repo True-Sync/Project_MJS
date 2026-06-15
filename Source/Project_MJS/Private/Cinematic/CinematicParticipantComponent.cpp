@@ -60,7 +60,7 @@ void UCinematicParticipantComponent::ApplyInputLocks(const FCinematicPlaybackCon
 	{
 		if (UCinematicInputLockSubsystem* InputLockSubsystem = World->GetSubsystem<UCinematicInputLockSubsystem>())
 		{
-			InputLockHandle = InputLockSubsystem->AcquireInputLock(LockedPlayerController, bLockPlayerMoveInput, bLockPlayerLookInput);
+			InputLockHandle = InputLockSubsystem->AcquireInputLock(LockedPlayerController, bLockPlayerMoveInput, bLockPlayerLookInput, bLockPlayerGameplayInput);
 			return;
 		}
 	}

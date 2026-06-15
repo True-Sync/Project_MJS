@@ -5,17 +5,36 @@
 #include "Character/Player/Component/DodgeComponent.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
+#include "TimerManager.h"
+#include "DrawDebugHelpers.h"
 #include "GameFramework/Character.h"
+#include "Kismet/GameplayStatics.h"
 
 UAttackComponent::UAttackComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	// 평소에는 연산하지 않도록 꺼둡니다.
+	//PrimaryComponentTick.bStartWithTickEnabled = false; 
 }
-
 
 void UAttackComponent::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void UAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+	
+	if (bIsWeaponAttacking)
+	{
+		CheckWeaponTrace();
+	}
+	
+	if (bIsKickAttacking)
+	{
+		CheckKickTrace();
+	}
 }
 
 void UAttackComponent::RequestAttack()
@@ -150,3 +169,192 @@ void UAttackComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
 	ActiveMontage = nullptr;
 }
 
+// =============== 공격 판정 용 함수 구현부 ==================
+
+// 카타나, 대검 등 무기전용
+void UAttackComponent::StartWeaponAttack(float KnockbackForce)
+{
+	HitActors.Empty();
+	
+	CurrentKnockbackForce = KnockbackForce;	
+	//UE_LOG(LogTemp, Warning, TEXT("Attack Knockb ackForce : %f"), KnockbackForce);
+
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (OwnerCharacter && OwnerCharacter->GetMesh())
+	{
+		LastWeaponStartPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_StartSocket"));
+		LastWeaponEndPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_EndSocket"));
+	}
+
+	bIsWeaponAttacking = true;
+	//SetComponentTickEnabled(true);
+}
+
+void UAttackComponent::EndWeaponAttack()
+{
+	if (bIsWeaponAttacking)
+	{
+		CheckWeaponTrace();
+	}
+	
+	bIsWeaponAttacking = false;
+	//if (!bIsKickAttacking) 
+	//{
+	//	SetComponentTickEnabled(false); 
+	//}
+}
+
+void UAttackComponent::CheckWeaponTrace()
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!OwnerCharacter) return;
+
+	FVector CurrentWeaponStartPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_StartSocket"));
+	FVector CurrentWeaponEndPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_EndSocket"));
+	
+	int32 NumSegments = 2;
+	float SweepRadius = 15.0f;
+
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(GetOwner());
+
+	for (int32 i = 0; i <= NumSegments; ++i)
+	{
+		float Alpha = (float)i / NumSegments;
+		FVector SegmentLastPos = FMath::Lerp(LastWeaponStartPos, LastWeaponEndPos, Alpha);
+		FVector SegmentCurrPos = FMath::Lerp(CurrentWeaponStartPos, CurrentWeaponEndPos, Alpha);
+
+		FHitResult HitResult;
+		bool bHit = GetWorld()->SweepSingleByChannel(
+			HitResult, SegmentLastPos, SegmentCurrPos, FQuat::Identity, 
+			ECC_GameTraceChannel1, FCollisionShape::MakeSphere(SweepRadius), Params
+		);
+		
+		DrawDebugAttackShape(SegmentLastPos, SegmentCurrPos, SweepRadius, bHit);
+
+		if (bHit && HitResult.GetActor())
+		{
+			AActor* HitActor = HitResult.GetActor();
+			if (!HitActors.Contains(HitActor))
+			{
+				HitActors.Add(HitActor); 
+				
+				APawn* OwnerPawn = Cast<APawn>(GetOwner());
+				AController* InstigatorController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
+				//방사형 넉백
+				//FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+				
+				//정면 방향 넉백(플레이어가 바라보는 방향)
+				FVector ShotDirection = OwnerPawn->GetActorForwardVector();
+
+				UGameplayStatics::ApplyPointDamage(
+					HitActor, 30.0f, ShotDirection, HitResult, InstigatorController, GetOwner(), UDamageType::StaticClass()
+				);
+			}
+		}
+	}
+
+	LastWeaponStartPos = CurrentWeaponStartPos;
+	LastWeaponEndPos = CurrentWeaponEndPos;
+}
+
+// 발차기 전용
+void UAttackComponent::StartKickAttack(FName SocketName, float KnockbackForce)
+{
+	HitActors.Empty();
+	CurrentKickSocket = SocketName;
+	CurrentKnockbackForce = KnockbackForce;
+	
+	bIsKickAttacking = true;
+	//SetComponentTickEnabled(true);
+}
+
+void UAttackComponent::EndKickAttack()
+{
+	if (bIsKickAttacking)
+	{
+		CheckKickTrace();
+	}
+	
+	bIsKickAttacking = false;
+	//if (!bIsWeaponAttacking)
+	//{
+	//	SetComponentTickEnabled(false);
+	//}
+}
+
+void UAttackComponent::CheckKickTrace()
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!OwnerCharacter) return;
+	
+	FVector KickLocation = OwnerCharacter->GetMesh()->GetSocketLocation(CurrentKickSocket);
+
+	FHitResult HitResult;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(GetOwner());
+
+	// 발 주변을 감싸는 구체 판정
+	float KickRadius = 30.0f;
+	
+	bool bHit = GetWorld()->SweepSingleByChannel(
+		HitResult, 
+		KickLocation, // Start
+		KickLocation, // End
+		FQuat::Identity,
+		ECC_GameTraceChannel1, 
+		FCollisionShape::MakeSphere(KickRadius), 
+		Params
+	);
+	
+	DrawDebugAttackShape(KickLocation, KickLocation, KickRadius, bHit);
+
+	if (bHit && HitResult.GetActor())
+	{
+		AActor* HitActor = HitResult.GetActor();
+		if (!HitActors.Contains(HitActor))
+		{
+			HitActors.Add(HitActor);
+			
+			AController* InstigatorController = OwnerCharacter->GetController();
+			
+			//방사형 넉백
+			//FVector ShotDirection = (HitActor->GetActorLocation() - GetOwner()->GetActorLocation()).GetSafeNormal();
+			//정면 방향 넉백(플레이어가 바라보는 방향)
+			FVector ShotDirection = OwnerCharacter->GetActorForwardVector();
+				
+			UGameplayStatics::ApplyPointDamage(
+				HitActor, 
+				20.0f, 
+				ShotDirection, 
+				HitResult, 
+				InstigatorController, 
+				GetOwner(), 
+				UDamageType::StaticClass()
+			);
+		}
+	}
+}
+
+void UAttackComponent::DrawDebugAttackShape(const FVector& StartPos, const FVector& EndPos, float Radius, bool bHit)
+{
+#if ENABLE_DRAW_DEBUG
+	if (!bShowDebugShape) return;
+
+	FColor DrawColor = bHit ? FColor::Red : FColor::Green;
+	float LifeTime = 0.5f; 
+
+	if (StartPos == EndPos)
+	{
+		DrawDebugSphere(GetWorld(), StartPos, Radius, 16, DrawColor, false, LifeTime);
+	}
+	else
+	{
+		FVector Center = (StartPos + EndPos) * 0.5f;
+		float HalfHeight = (EndPos - StartPos).Size() * 0.5f + Radius;
+		FQuat Rotation = FRotationMatrix::MakeFromZ(EndPos - StartPos).ToQuat();
+		
+		DrawDebugCapsule(GetWorld(), Center, HalfHeight, Radius, Rotation, DrawColor, false, LifeTime);
+	}
+#endif
+}

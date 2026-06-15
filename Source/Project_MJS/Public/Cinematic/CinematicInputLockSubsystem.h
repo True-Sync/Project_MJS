@@ -24,6 +24,9 @@ struct PROJECT_MJS_API FCinematicInputLockRecord
 
 	UPROPERTY(Transient)
 	bool bLockLookInput = false;
+
+	UPROPERTY(Transient)
+	bool bLockGameplayInput = false;
 };
 
 UCLASS()
@@ -34,8 +37,12 @@ class PROJECT_MJS_API UCinematicInputLockSubsystem : public UWorldSubsystem
 public:
 	virtual void Deinitialize() override;
 
-	int32 AcquireInputLock(APlayerController* PlayerController, bool bLockMoveInput, bool bLockLookInput);
+	int32 AcquireInputLock(APlayerController* PlayerController, bool bLockMoveInput, bool bLockLookInput, bool bLockGameplayInput);
 	void ReleaseInputLock(int32 LockHandle);
+
+	bool IsMoveInputLocked(const APlayerController* PlayerController) const;
+	bool IsLookInputLocked(const APlayerController* PlayerController) const;
+	bool IsGameplayInputLocked(const APlayerController* PlayerController) const;
 
 private:
 	UPROPERTY(Transient)

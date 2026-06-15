@@ -15,9 +15,9 @@ void UCinematicInputLockSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerController, bool bLockMoveInput, bool bLockLookInput)
+int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerController, bool bLockMoveInput, bool bLockLookInput, bool bLockGameplayInput)
 {
-	if (!PlayerController || (!bLockMoveInput && !bLockLookInput))
+	if (!PlayerController || (!bLockMoveInput && !bLockLookInput && !bLockGameplayInput))
 	{
 		return INDEX_NONE;
 	}
@@ -28,6 +28,7 @@ int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerCo
 	LockRecord.PlayerController = PlayerController;
 	LockRecord.bLockMoveInput = bLockMoveInput;
 	LockRecord.bLockLookInput = bLockLookInput;
+	LockRecord.bLockGameplayInput = bLockGameplayInput;
 
 	if (bLockMoveInput)
 	{
@@ -65,4 +66,61 @@ void UCinematicInputLockSubsystem::ReleaseInputLock(int32 LockHandle)
 	{
 		PlayerController->SetIgnoreLookInput(false);
 	}
+}
+
+bool UCinematicInputLockSubsystem::IsMoveInputLocked(const APlayerController* PlayerController) const
+{
+	if (!PlayerController)
+	{
+		return false;
+	}
+
+	for (const TPair<int32, FCinematicInputLockRecord>& LockPair : ActiveLocks)
+	{
+		const FCinematicInputLockRecord& LockRecord = LockPair.Value;
+		if (LockRecord.PlayerController.Get() == PlayerController && LockRecord.bLockMoveInput)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UCinematicInputLockSubsystem::IsLookInputLocked(const APlayerController* PlayerController) const
+{
+	if (!PlayerController)
+	{
+		return false;
+	}
+
+	for (const TPair<int32, FCinematicInputLockRecord>& LockPair : ActiveLocks)
+	{
+		const FCinematicInputLockRecord& LockRecord = LockPair.Value;
+		if (LockRecord.PlayerController.Get() == PlayerController && LockRecord.bLockLookInput)
+		{
+			return true;
+		}
+	}
+
+	return false;
+}
+
+bool UCinematicInputLockSubsystem::IsGameplayInputLocked(const APlayerController* PlayerController) const
+{
+	if (!PlayerController)
+	{
+		return false;
+	}
+
+	for (const TPair<int32, FCinematicInputLockRecord>& LockPair : ActiveLocks)
+	{
+		const FCinematicInputLockRecord& LockRecord = LockPair.Value;
+		if (LockRecord.PlayerController.Get() == PlayerController && LockRecord.bLockGameplayInput)
+		{
+			return true;
+		}
+	}
+
+	return false;
 }

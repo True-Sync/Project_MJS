@@ -48,6 +48,7 @@ private:
 		const FHitResult& SweepResult);
 
 	bool CanTriggerFor(AActor* TargetActor) const;
+	void StopTargetActiveMontages(AActor* TargetActor) const;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UBoxComponent> TriggerBox;
@@ -75,6 +76,10 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bRestoreViewTarget = true;
+
+	// 트리거 컷신에 들어가기 직전 재생 중이던 공격/회피 몽타주를 끊습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	bool bStopTargetMontagesOnTrigger = true;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float BlendOutTime = 0.15f;

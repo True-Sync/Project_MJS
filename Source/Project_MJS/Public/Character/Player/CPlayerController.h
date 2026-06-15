@@ -22,6 +22,9 @@ protected:
 public:
 	FRotator GetCameraYawRotation() const;
 
+	UFUNCTION(BlueprintPure, Category = "Cinematic|Input")
+	bool IsCinematicGameplayInputLocked() const;
+
 private:
 	// 초기 카메라 세팅 함수
 	void InitializeCameraRig();
@@ -31,6 +34,8 @@ private:
 	void OnLookInput(const FInputActionValue& Value);
 	void OnDodgeInput();
 	void OnAttackInput();
+	bool IsCinematicMoveInputLocked() const;
+	bool IsCinematicLookInputLocked() const;
 
 	// ===== Input =====
 	UPROPERTY(EditDefaultsOnly, Category = "Input")

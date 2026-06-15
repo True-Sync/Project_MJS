@@ -38,6 +38,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|Input")
 	bool bLockPlayerLookInput = true;
 
+	// 공격, 회피, 스킬처럼 Enhanced Input 액션으로 들어오는 전투 입력을 막습니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|Input")
+	bool bLockPlayerGameplayInput = true;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|Movement")
 	bool bDisableCharacterMovement = true;
 
