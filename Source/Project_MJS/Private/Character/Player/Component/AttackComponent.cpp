@@ -12,7 +12,7 @@ UAttackComponent::UAttackComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
 	// 평소에는 연산하지 않도록 꺼둡니다.
-	PrimaryComponentTick.bStartWithTickEnabled = false; 
+	//PrimaryComponentTick.bStartWithTickEnabled = false; 
 }
 
 void UAttackComponent::BeginPlay()
@@ -160,9 +160,12 @@ void UAttackComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
 // =============== 공격 판정 용 함수 구현부 ==================
 
 // 카타나, 대검 등 무기전용
-void UAttackComponent::StartWeaponAttack()
+void UAttackComponent::StartWeaponAttack(float KnockbackForce)
 {
 	HitActors.Empty();
+	
+	CurrentKnockbackForce = KnockbackForce;	
+	//UE_LOG(LogTemp, Warning, TEXT("Attack Knockb ackForce : %f"), KnockbackForce);
 
 	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
 	if (OwnerCharacter && OwnerCharacter->GetMesh())
@@ -172,16 +175,21 @@ void UAttackComponent::StartWeaponAttack()
 	}
 
 	bIsWeaponAttacking = true;
-	SetComponentTickEnabled(true);
+	//SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndWeaponAttack()
 {
-	bIsWeaponAttacking = false;
-	if (!bIsKickAttacking) 
+	if (bIsWeaponAttacking)
 	{
-		SetComponentTickEnabled(false); 
+		CheckWeaponTrace();
 	}
+	
+	bIsWeaponAttacking = false;
+	//if (!bIsKickAttacking) 
+	//{
+	//	SetComponentTickEnabled(false); 
+	//}
 }
 
 void UAttackComponent::CheckWeaponTrace()
@@ -192,7 +200,7 @@ void UAttackComponent::CheckWeaponTrace()
 	FVector CurrentWeaponStartPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_StartSocket"));
 	FVector CurrentWeaponEndPos = OwnerCharacter->GetMesh()->GetSocketLocation(TEXT("WeaponAttach_EndSocket"));
 	
-	int32 NumSegments = 8;
+	int32 NumSegments = 2;
 	float SweepRadius = 15.0f;
 
 	FCollisionQueryParams Params;
@@ -235,22 +243,28 @@ void UAttackComponent::CheckWeaponTrace()
 }
 
 // 발차기 전용
-void UAttackComponent::StartKickAttack(FName SocketName)
+void UAttackComponent::StartKickAttack(FName SocketName, float KnockbackForce)
 {
 	HitActors.Empty();
 	CurrentKickSocket = SocketName;
+	CurrentKnockbackForce = KnockbackForce;
 	
 	bIsKickAttacking = true;
-	SetComponentTickEnabled(true);
+	//SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndKickAttack()
 {
-	bIsKickAttacking = false;
-	if (!bIsWeaponAttacking)
+	if (bIsKickAttacking)
 	{
-		SetComponentTickEnabled(false);
+		CheckKickTrace();
 	}
+	
+	bIsKickAttacking = false;
+	//if (!bIsWeaponAttacking)
+	//{
+	//	SetComponentTickEnabled(false);
+	//}
 }
 
 void UAttackComponent::CheckKickTrace()

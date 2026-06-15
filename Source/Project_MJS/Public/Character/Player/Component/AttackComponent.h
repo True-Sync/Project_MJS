@@ -44,18 +44,23 @@ private:
 	FVector LastWeaponEndPos;
 	FName CurrentKickSocket;
 	
+	// 현재 타격의 넉백 수치를 기억할 변수
+	float CurrentKnockbackForce = 500.0f;
+	
 public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
+	float GetCurrentKnockbackForce() const { return CurrentKnockbackForce; }
+	
 	// 노티파이 상태에서 호출할 공격 판정 시작/종료 함수
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void StartWeaponAttack();
+	void StartWeaponAttack(float KnockbackForce);
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndWeaponAttack();
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
-	void StartKickAttack(FName SocketName);
+	void StartKickAttack(FName SocketName, float KnockbackForce);
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndKickAttack();

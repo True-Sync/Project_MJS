@@ -1,10 +1,10 @@
 #include "Character/Enemy/EnemyCharacter.h"
 
 #include "Engine/DamageEvents.h"
-#include "GameFramework/CharacterMovementComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Animation/AnimInstance.h"
 #include "AIController.h"
+#include "Character/Player/Component/AttackComponent.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
@@ -97,11 +97,22 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 		{
 			AIController->StopMovement();
 		}
-
+		
+		// AttackCOmponent에서 넉백 수치 가져옴
+		float AppliedKnockbackForce = HitBackForce;
+		if (DamageCauser)
+		{
+			UAttackComponent* AttackComp = Cast<UAttackComponent>(DamageCauser->GetComponentByClass(UAttackComponent::StaticClass()));
+			if (AttackComp)
+			{
+				AppliedKnockbackForce = AttackComp->GetCurrentKnockbackForce();
+			}
+		}
+		
 		KnockbackDirection.Z += 0.25f;
 		KnockbackDirection.Normalize();
-
-		LaunchCharacter(KnockbackDirection * HitBackForce, true, true);
+		//UE_LOG(LogTemp, Warning, TEXT("Knockback :: Force : %f"), AppliedKnockbackForce);
+		LaunchCharacter(KnockbackDirection * AppliedKnockbackForce, true, true);
 		
 		GetWorldTimerManager().SetTimer(HitRecoveryTimerHandle, this, &AEnemyCharacter::ResetHitState, RecoveryTime, false);
 	}
