@@ -8,7 +8,7 @@
 
 namespace
 {
-UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
+UCameraDirectingComponent* FindCameraDirectingComponentForShakeNotify(const USkeletalMeshComponent* MeshComp)
 {
 	const AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 	const APawn* PawnOwner = Cast<APawn>(Owner);
@@ -38,7 +38,7 @@ void UAnimNotify_CameraShake::Notify(USkeletalMeshComponent* MeshComp, UAnimSequ
 {
 	Super::Notify(MeshComp, Animation, EventReference);
 
-	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
+	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponentForShakeNotify(MeshComp))
 	{
 		DirectingComponent->PlayCameraShake(ShakeClass, Scale, PlaySpace, UserPlaySpaceRot);
 	}

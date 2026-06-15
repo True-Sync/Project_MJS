@@ -79,6 +79,7 @@ public:
 		SHADER_PARAMETER(float,     EnvRimPower)
 		SHADER_PARAMETER(FVector3f, EnvRimColor)
 		SHADER_PARAMETER(float,     BackgroundWhiteRimIntensity)
+		SHADER_PARAMETER(float,     BackgroundWhiteRimIntensityScale)
 		SHADER_PARAMETER(float,     BackgroundWhiteRimPower)
 		SHADER_PARAMETER(float,     BackgroundWhiteRimSurfaceStrength)
 		SHADER_PARAMETER(float,     BackgroundWhiteRimLumaStart)

@@ -7,7 +7,7 @@
 
 namespace
 {
-UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
+UCameraDirectingComponent* FindCameraDirectingComponentForFOVNotify(const USkeletalMeshComponent* MeshComp)
 {
 	const AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 	const APawn* PawnOwner = Cast<APawn>(Owner);
@@ -37,7 +37,7 @@ void UAnimNotify_CameraFOV::Notify(USkeletalMeshComponent* MeshComp, UAnimSequen
 {
 	Super::Notify(MeshComp, Animation, EventReference);
 
-	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
+	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponentForFOVNotify(MeshComp))
 	{
 		DirectingComponent->PlayFOV(TargetFOV, BlendInTime, HoldTime, BlendOutTime, bRestoreAfterHold, bUseExplicitStartFOV, ExplicitStartFOV, BlendType);
 	}

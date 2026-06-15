@@ -365,13 +365,18 @@ namespace TrueSyncEndfieldShading
 		TEXT("HDR white rim on bright reflective environment pixels. Separate from shadow/sky-light edge lift."),
 		ECVF_RenderThreadSafe);
 
+	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimIntensityScale(
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimIntensityScale"), 2.0f,
+		TEXT("Additional scale for background white rim. Lower values reduce temporal flicker on bright repeated surfaces."),
+		ECVF_RenderThreadSafe);
+
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimPower(
 		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimPower"), 2.2f,
 		TEXT("Background white rim falloff exponent. Lower values make the highlight wider."),
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimSurfaceStrength(
-		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimSurfaceStrength"), 0.45f,
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimSurfaceStrength"), 0.28f,
 		TEXT("How much bright reflective background surfaces can glow even when the depth/normal edge mask is weak."),
 		ECVF_RenderThreadSafe);
 
@@ -386,7 +391,7 @@ namespace TrueSyncEndfieldShading
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimHighlightContrast(
-		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimHighlightContrast"), 3.0f,
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimHighlightContrast"), 1.5f,
 		TEXT("How much local bright-on-dark contrast contributes to the background white rim."),
 		ECVF_RenderThreadSafe);
 
@@ -765,6 +770,8 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 		TrueSyncEndfieldShading::CVarEnvRimB.GetValueOnRenderThread());
 	PassParameters->BackgroundWhiteRimIntensity =
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimIntensity.GetValueOnRenderThread();
+	PassParameters->BackgroundWhiteRimIntensityScale =
+		TrueSyncEndfieldShading::CVarBackgroundWhiteRimIntensityScale.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimPower =
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimPower.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimSurfaceStrength =
