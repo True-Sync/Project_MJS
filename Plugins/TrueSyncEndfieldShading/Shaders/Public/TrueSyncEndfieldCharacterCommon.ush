@@ -1,6 +1,8 @@
 #ifndef TSE_CHARACTER_COMMON_USH
 #define TSE_CHARACTER_COMMON_USH
 
+#include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldMaterialGraphCommon.ush"
+
 // -----------------------------------------------------------------------------
 // TrueSyncEndfieldCharacterCommon.ush
 //
@@ -126,6 +128,43 @@ float3 TSE_ApplyPartLightingControl(
 	float PartMask)
 {
 	return lerp(BaseColor, ShadowedColor, saturate(PartMask));
+}
+
+float3 TSE_CharacterGraphCelRim(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 LightDirWS,
+	float CelStrength,
+	float CelThreshold,
+	float CelSoftness,
+	float CelShadowDepth,
+	float3 CelShadowTint,
+	float3 RimColor,
+	float RimIntensity,
+	float RimPower,
+	float RimLightStart,
+	float RimLightEnd,
+	float RimLightWrap,
+	float DirectionalRimStrength)
+{
+	return TSE_MG_ApplyCelAndDirectionalRim(
+		BaseColor,
+		NormalWS,
+		ViewDirWS,
+		LightDirWS,
+		CelStrength,
+		CelThreshold,
+		CelSoftness,
+		CelShadowDepth,
+		CelShadowTint,
+		RimColor,
+		RimIntensity,
+		RimPower,
+		RimLightStart,
+		RimLightEnd,
+		RimLightWrap,
+		DirectionalRimStrength);
 }
 
 #endif

@@ -1,6 +1,8 @@
 #ifndef TSE_ENVIRONMENT_COMMON_USH
 #define TSE_ENVIRONMENT_COMMON_USH
 
+#include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldMaterialGraphCommon.ush"
+
 // -----------------------------------------------------------------------------
 // TrueSyncEndfieldEnvironmentCommon.ush
 //
@@ -154,6 +156,27 @@ float3 TSE_RockSurfaceColor(
 		DiffuseThreshold,
 		DiffuseSoftness,
 		ShadowTint);
+}
+
+float3 TSE_EnvironmentGraphCel(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 LightDirWS,
+	float CelStrength,
+	float CelThreshold,
+	float CelSoftness,
+	float CelShadowDepth,
+	float3 CelShadowTint)
+{
+	return TSE_MG_ApplyCelShadowBand(
+		BaseColor,
+		NormalWS,
+		LightDirWS,
+		CelStrength,
+		CelThreshold,
+		CelSoftness,
+		CelShadowDepth,
+		CelShadowTint);
 }
 
 #endif

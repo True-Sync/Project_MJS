@@ -49,19 +49,27 @@ float VFXStencilValue;
 float UseMaterialStencilPalette;
 float CustomDepthCharacterFallback;
 float CustomDepthFallbackThreshold;
+float3 KeyLightDirection;
 
 // ---------------------------------------------------------------------------
 // Zone B — 캐릭터
 // ---------------------------------------------------------------------------
 float CharacterContrastBoost;
 float CharacterSaturationBoost;
+float CharacterCelShadingStrength;
+float CharacterCelShadowThreshold;
+float CharacterCelShadowSoftness;
+float CharacterCelShadowDepth;
+float3 CharacterCelShadowTint;
 float CharacterRimIntensity;
 float CharacterRimPower;
+float CharacterDirectionalRimStrength;
+float CharacterDirectionalRimLightStart;
+float CharacterDirectionalRimLightEnd;
+float CharacterDirectionalRimLightWrap;
 float3 CharacterRimColor;
 float CharacterWhiteRimIntensity;
 float CharacterWhiteRimPower;
-float CharacterWhiteRimHaloIntensity;
-float CharacterWhiteRimHaloWidth;
 float3 CharacterWhiteRimColor;
 float CharacterOutlineIntensity;
 float CharacterOutlineWidth;
@@ -72,6 +80,13 @@ float3 CharacterOutlineColor;
 // ---------------------------------------------------------------------------
 float EnvDesaturation;
 float EnvCoolShift;
+float EnvCelShadingStrength;
+float EnvCelShadowThreshold;
+float EnvCelShadowSoftness;
+float EnvCelShadowDepth;
+float3 EnvCelShadowTint;
+float EnvCelFadeStartDistance;
+float EnvCelFadeEndDistance;
 float EnvRimIntensity;
 float EnvRimPower;
 float3 EnvRimColor;
@@ -81,6 +96,8 @@ float BackgroundWhiteRimSurfaceStrength;
 float BackgroundWhiteRimLumaStart;
 float BackgroundWhiteRimLumaEnd;
 float BackgroundWhiteRimHighlightContrast;
+float BackgroundWhiteRimFadeStartDistance;
+float BackgroundWhiteRimFadeEndDistance;
 float3 BackgroundWhiteRimColor;
 float EnvShadowDensity;
 float EnvShadowLumaStart;
@@ -121,6 +138,17 @@ float DebugBackgroundWhiteRim;
 float TSE_Luma(float3 C)
 {
 	return dot(C, float3(0.299f, 0.587f, 0.114f));
+}
+
+float3 TSE_SafeNormalize(float3 V, float3 Fallback)
+{
+	const float LenSq = dot(V, V);
+	return LenSq > 1e-6f ? V * rsqrt(LenSq) : Fallback;
+}
+
+float3 TSE_KeyLightDirection()
+{
+	return TSE_SafeNormalize(KeyLightDirection, float3(-0.35f, -0.45f, 0.82f));
 }
 
 float TSE_GetPreExposure()
@@ -180,6 +208,11 @@ float TSE_ShadowMask(float3 C, float LumaStart, float LumaEnd)
 	const float Luma = TSE_PerceptualLuma(C);
 	const float LitRamp = saturate((Luma - LumaStart) / max(LumaEnd - LumaStart, 1e-4f));
 	return 1.0f - smoothstep(0.0f, 1.0f, LitRamp);
+}
+
+float TSE_DistanceFadeOut(float LinearDepth, float FadeStart, float FadeEnd)
+{
+	return 1.0f - smoothstep(FadeStart, max(FadeEnd, FadeStart + 1.0f), LinearDepth);
 }
 
 float3 ApplyEnvironmentShadowDensity(float3 Color, float ShadowMask, float DensityScale)
@@ -366,6 +399,61 @@ float ComputeRimMask(float2 UV, float Power)
 #endif
 }
 
+float3 SampleWorldNormalForStyle(float2 UV)
+{
+#if SHADING_PATH_DEFERRED
+	const float4 GBufferA_Sample = Texture2DSampleLevel(
+		SceneTexturesStruct.GBufferATexture,
+		SceneTexturesStruct_GBufferATextureSampler,
+		UV, 0);
+	return TSE_SafeNormalize(GBufferA_Sample.rgb * 2.0f - 1.0f, float3(0.0f, 0.0f, 1.0f));
+#else
+	return float3(0.0f, 0.0f, 1.0f);
+#endif
+}
+
+float ComputeLightBand(float3 WorldNormal, float Threshold, float Softness)
+{
+	const float NdotL = saturate(dot(WorldNormal, TSE_KeyLightDirection()));
+	const float HalfSoftness = max(Softness * 0.5f, 1e-4f);
+	return smoothstep(Threshold - HalfSoftness, Threshold + HalfSoftness, NdotL);
+}
+
+float3 ApplyCelShadowBand(
+	float3 Color,
+	float2 UV,
+	float Strength,
+	float Threshold,
+	float Softness,
+	float Depth,
+	float3 ShadowTint)
+{
+#if SHADING_PATH_DEFERRED
+	const float LitMask = ComputeLightBand(SampleWorldNormalForStyle(UV), Threshold, Softness);
+	const float ShadowAmount = (1.0f - LitMask) * saturate(Strength) * saturate(Depth);
+	return lerp(Color, Color * max(ShadowTint, 0.0f.xxx), ShadowAmount);
+#else
+	return Color;
+#endif
+}
+
+float ComputeDirectionalRimMask(float2 UV, float Power)
+{
+#if SHADING_PATH_DEFERRED
+	const float3 WorldNormal = SampleWorldNormalForStyle(UV);
+	const float BaseRim = ComputeRimMask(UV, Power);
+	const float Wrap = max(CharacterDirectionalRimLightWrap, 0.0f);
+	const float WrappedNdotL = saturate((dot(WorldNormal, TSE_KeyLightDirection()) + Wrap) / (1.0f + Wrap));
+	const float LightSideMask = smoothstep(
+		CharacterDirectionalRimLightStart,
+		max(CharacterDirectionalRimLightEnd, CharacterDirectionalRimLightStart + 1e-4f),
+		WrappedNdotL);
+	return BaseRim * lerp(1.0f, LightSideMask, saturate(CharacterDirectionalRimStrength));
+#else
+	return ComputeRimMask(UV, Power);
+#endif
+}
+
 float CharacterRimAmount(float HairMask, float FaceMask, float MetalGearMask)
 {
 	float Amount = CharacterRimIntensity;
@@ -518,38 +606,6 @@ float ComputeCharacterMaskAt(float2 SampleUV, float2 SamplePixelPos)
 	return Masks.Character;
 }
 
-float ComputeCharacterWhiteHaloMask(float2 UV, float2 PixelPos, float CharacterMask)
-{
-	if (CharacterWhiteRimHaloIntensity <= 0.0f)
-	{
-		return 0.0f;
-	}
-
-	const float OutsideCharacter = 1.0f - saturate(CharacterMask);
-	if (OutsideCharacter <= 0.0f)
-	{
-		return 0.0f;
-	}
-
-	const float Width = max(CharacterWhiteRimHaloWidth, 1.0f);
-	const float2 UvStep = InputViewport_ExtentInverse * Width;
-	const float2 PixelStep = float2(Width, Width);
-
-	float CardinalMask = 0.0f;
-	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x, 0.0f), PixelPos + float2( PixelStep.x, 0.0f)));
-	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x, 0.0f), PixelPos + float2(-PixelStep.x, 0.0f)));
-	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(0.0f,  UvStep.y), PixelPos + float2(0.0f,  PixelStep.y)));
-	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(0.0f, -UvStep.y), PixelPos + float2(0.0f, -PixelStep.y)));
-
-	float DiagonalMask = 0.0f;
-	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x,  UvStep.y), PixelPos + float2( PixelStep.x,  PixelStep.y)));
-	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x,  UvStep.y), PixelPos + float2(-PixelStep.x,  PixelStep.y)));
-	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x, -UvStep.y), PixelPos + float2( PixelStep.x, -PixelStep.y)));
-	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x, -UvStep.y), PixelPos + float2(-PixelStep.x, -PixelStep.y)));
-
-	return saturate(max(CardinalMask, DiagonalMask * 0.70f)) * OutsideCharacter;
-}
-
 float ComputeCharacterOutlineMask(float2 UV, float2 PixelPos, float CharacterMask)
 {
 	if (CharacterOutlineIntensity <= 0.0f)
@@ -616,13 +672,26 @@ float3 ProcessCharacter(
 		* lerp(1.0f, 0.96f, GearMask);
 	Result = lerp(Luma2.xxx, Result, max(EffectiveSaturation, 0.0f));
 
+	const float CharacterCelPartScale =
+		lerp(1.0f, 0.70f, SoftPartMask)
+		* lerp(1.0f, 1.08f, FabricMask)
+		* lerp(1.0f, 1.16f, GearMask);
+	Result = ApplyCelShadowBand(
+		Result,
+		UV,
+		CharacterCelShadingStrength * CharacterCelPartScale,
+		CharacterCelShadowThreshold,
+		CharacterCelShadowSoftness,
+		CharacterCelShadowDepth,
+		CharacterCelShadowTint);
+
 	// 3. 림라이트: 캐릭터 외곽에 은은한 쿨톤 글로우
-	const float RimMask = ComputeRimMask(UV, CharacterRimPower);
+	const float RimMask = ComputeDirectionalRimMask(UV, CharacterRimPower);
 	Result += RimMask
 		* CharacterRimAmount(HairMask, FaceMask, MetalGearMask)
 		* CharacterRimColor;
 
-	const float WhiteRimMask = ComputeRimMask(UV, CharacterWhiteRimPower);
+	const float WhiteRimMask = ComputeDirectionalRimMask(UV, CharacterWhiteRimPower);
 	const float WhiteRimPartScale =
 		lerp(1.0f, 0.72f, saturate(FaceMask))
 		* lerp(1.0f, 1.22f, saturate(HairMask))
@@ -653,8 +722,13 @@ float3 ProcessEnvironment(
 	const float IndustrialMetal = saturate(IndustrialMetalMask);
 	const float Concrete = saturate(ConcreteMask);
 	const float VFX = saturate(VFXMask);
+	const float BackgroundWhiteRimDistanceFade = TSE_DistanceFadeOut(
+		LinearDepth,
+		BackgroundWhiteRimFadeStartDistance,
+		BackgroundWhiteRimFadeEndDistance);
 	const float BackgroundWhiteRimMask =
-		ComputeBackgroundWhiteRimMask(Color, UV, Terrain, IndustrialMetal, Concrete, VFX);
+		ComputeBackgroundWhiteRimMask(Color, UV, Terrain, IndustrialMetal, Concrete, VFX)
+		* BackgroundWhiteRimDistanceFade;
 	float3 Result = Color;
 
 	// 1. 미세 채도 감소 (환경이 캐릭터보다 더 중성적으로 보이게)
@@ -674,6 +748,23 @@ float3 ProcessEnvironment(
 	Result.r *= (1.0f - 0.08f * EffectiveCoolShift);
 	Result.g *= (1.0f + 0.02f * EffectiveCoolShift);
 	Result.b *= (1.0f + 0.10f * EffectiveCoolShift);
+
+	const float EnvCelMaterialScale =
+		lerp(1.0f, 0.88f, Terrain)
+		* lerp(1.0f, 1.12f, IndustrialMetal)
+		* lerp(1.0f, 1.05f, Concrete)
+		* lerp(1.0f, 0.18f, VFX);
+	Result = ApplyCelShadowBand(
+		Result,
+		UV,
+		EnvCelShadingStrength * EnvCelMaterialScale * TSE_DistanceFadeOut(
+			LinearDepth,
+			EnvCelFadeStartDistance,
+			EnvCelFadeEndDistance),
+		EnvCelShadowThreshold,
+		EnvCelShadowSoftness,
+		EnvCelShadowDepth,
+		EnvCelShadowTint);
 
 	// 3. 그림자 밀도 보존.
 	// Endfield 계열의 산업 실내는 어두운 면이 중성 회색으로 떠 있으면 바로 가벼워진다.
@@ -803,12 +894,6 @@ void MainPS(
 	float3 Result = StyleSceneColor;                        // Sky: 원본
 	Result = lerp(Result, EnvColor,  ZoneMasks.Environment); // 환경 오버라이드
 	Result = lerp(Result, CharColor, ZoneMasks.Character);   // 캐릭터 오버라이드
-
-	const float CharacterWhiteHaloMask =
-		ComputeCharacterWhiteHaloMask(UV, PixelPos, ZoneMasks.Character);
-	Result += CharacterWhiteHaloMask
-		* max(CharacterWhiteRimHaloIntensity, 0.0f)
-		* CharacterWhiteRimColor;
 
 	const float CharacterOutlineMask =
 		ComputeCharacterOutlineMask(UV, PixelPos, ZoneMasks.Character);
