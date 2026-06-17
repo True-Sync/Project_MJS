@@ -6,9 +6,18 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "EngineUtils.h"
 
-namespace
+
+void UAnimNotify_CameraShake::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
 {
-UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
+	Super::Notify(MeshComp, Animation, EventReference);
+
+	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
+	{
+		DirectingComponent->PlayCameraShake(ShakeClass, Scale, PlaySpace, UserPlaySpaceRot);
+	}
+}
+
+UCameraDirectingComponent* UAnimNotify_CameraShake::FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
 {
 	const AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 	const APawn* PawnOwner = Cast<APawn>(Owner);
@@ -31,15 +40,4 @@ UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshCompo
 	}
 
 	return CameraRig ? CameraRig->GetCameraDirectingComponent() : nullptr;
-}
-}
-
-void UAnimNotify_CameraShake::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
-{
-	Super::Notify(MeshComp, Animation, EventReference);
-
-	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
-	{
-		DirectingComponent->PlayCameraShake(ShakeClass, Scale, PlaySpace, UserPlaySpaceRot);
-	}
 }

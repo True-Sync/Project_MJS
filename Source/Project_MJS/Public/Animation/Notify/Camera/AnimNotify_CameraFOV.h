@@ -5,6 +5,7 @@
 #include "Camera/CameraDirectingComponent.h"
 #include "AnimNotify_CameraFOV.generated.h"
 
+
 UCLASS()
 class PROJECT_MJS_API UAnimNotify_CameraFOV : public UAnimNotify
 {
@@ -14,6 +15,8 @@ public:
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;
 
 private:
+	UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp);
+	
 	UPROPERTY(EditAnywhere, Category = "Camera|FOV", meta = (ClampMin = "1.0", ClampMax = "179.0"))
 	float TargetFOV = 70.0f;
 

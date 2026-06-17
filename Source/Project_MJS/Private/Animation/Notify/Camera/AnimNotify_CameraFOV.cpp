@@ -1,13 +1,22 @@
 #include "Animation/Notify/Camera/AnimNotify_CameraFOV.h"
 
+#include "Camera/CameraDirectingComponent.h"
 #include "Camera/CameraRigActor.h"
 #include "Character/Player/CPlayerController.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "EngineUtils.h"
 
-namespace
+void UAnimNotify_CameraFOV::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
 {
-UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
+	Super::Notify(MeshComp, Animation, EventReference);
+
+	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
+	{
+		DirectingComponent->PlayFOV(TargetFOV, BlendInTime, HoldTime, BlendOutTime, bRestoreAfterHold, bUseExplicitStartFOV, ExplicitStartFOV, BlendType);
+	}
+}
+
+UCameraDirectingComponent* UAnimNotify_CameraFOV::FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp)
 {
 	const AActor* Owner = MeshComp ? MeshComp->GetOwner() : nullptr;
 	const APawn* PawnOwner = Cast<APawn>(Owner);
@@ -30,15 +39,4 @@ UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshCompo
 	}
 
 	return CameraRig ? CameraRig->GetCameraDirectingComponent() : nullptr;
-}
-}
-
-void UAnimNotify_CameraFOV::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference)
-{
-	Super::Notify(MeshComp, Animation, EventReference);
-
-	if (UCameraDirectingComponent* DirectingComponent = FindCameraDirectingComponent(MeshComp))
-	{
-		DirectingComponent->PlayFOV(TargetFOV, BlendInTime, HoldTime, BlendOutTime, bRestoreAfterHold, bUseExplicitStartFOV, ExplicitStartFOV, BlendType);
-	}
 }

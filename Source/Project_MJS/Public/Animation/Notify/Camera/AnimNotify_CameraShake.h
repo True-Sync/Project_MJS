@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimNotifies/AnimNotify.h"
+#include "Camera/CameraDirectingComponent.h"
 #include "Camera/CameraShakeBase.h"
 #include "AnimNotify_CameraShake.generated.h"
+
 
 UCLASS()
 class PROJECT_MJS_API UAnimNotify_CameraShake : public UAnimNotify
@@ -14,6 +16,8 @@ public:
 	virtual void Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* Animation, const FAnimNotifyEventReference& EventReference) override;
 
 private:
+	UCameraDirectingComponent* FindCameraDirectingComponent(const USkeletalMeshComponent* MeshComp);
+	
 	UPROPERTY(EditAnywhere, Category = "Camera|Shake")
 	TSubclassOf<UCameraShakeBase> ShakeClass;
 
