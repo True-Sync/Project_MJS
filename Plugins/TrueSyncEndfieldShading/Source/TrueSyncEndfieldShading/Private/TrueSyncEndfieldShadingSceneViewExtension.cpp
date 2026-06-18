@@ -125,6 +125,35 @@ namespace TrueSyncEndfieldShading
 			TEXT("Allowed depth difference in cm for CustomDepth character fallback."),
 			ECVF_RenderThreadSafe);
 
+		static TAutoConsoleVariable<float> CVarKeyLightDirX(
+			TEXT("r.TrueSyncEndfieldShading.KeyLightDirX"), -0.35f,
+			TEXT("World-space key light direction X used by post cel bands and directional character rim."),
+			ECVF_RenderThreadSafe);
+
+		static TAutoConsoleVariable<float> CVarKeyLightDirY(
+			TEXT("r.TrueSyncEndfieldShading.KeyLightDirY"), -0.45f,
+			TEXT("World-space key light direction Y used by post cel bands and directional character rim."),
+			ECVF_RenderThreadSafe);
+
+		static TAutoConsoleVariable<float> CVarKeyLightDirZ(
+			TEXT("r.TrueSyncEndfieldShading.KeyLightDirZ"), 0.82f,
+			TEXT("World-space key light direction Z used by post cel bands and directional character rim."),
+			ECVF_RenderThreadSafe);
+
+		static FVector3f GetKeyLightDirectionOnRenderThread()
+		{
+			const FVector3f Direction(
+				CVarKeyLightDirX.GetValueOnRenderThread(),
+				CVarKeyLightDirY.GetValueOnRenderThread(),
+				CVarKeyLightDirZ.GetValueOnRenderThread());
+			const float LengthSquared = Direction.SizeSquared();
+			if (LengthSquared <= UE_SMALL_NUMBER)
+			{
+				return FVector3f(-0.35f, -0.45f, 0.82f).GetSafeNormal();
+			}
+			return Direction * FMath::InvSqrt(LengthSquared);
+		}
+
 		// -----------------------------------------------------------------------
 		// Zone B — 캐릭터
 		// -----------------------------------------------------------------------
@@ -138,6 +167,41 @@ namespace TrueSyncEndfieldShading
 		TEXT("Saturation multiplier for character pixels. Preserves vibrant character colors."),
 		ECVF_RenderThreadSafe);
 
+	static TAutoConsoleVariable<float> CVarCharacterCelShadingStrength(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadingStrength"), 0.34f,
+		TEXT("Strength of key-light cel shadow bands on character pixels. 0=off."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowThreshold(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowThreshold"), 0.44f,
+		TEXT("NdotL threshold where character cel shadows start."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowSoftness(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowSoftness"), 0.10f,
+		TEXT("Softness around the character cel shadow threshold."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowDepth(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowDepth"), 0.24f,
+		TEXT("How dark the character cel shadow band can become."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowR(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowR"), 0.72f,
+		TEXT("Character cel shadow tint red channel."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowG(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowG"), 0.76f,
+		TEXT("Character cel shadow tint green channel."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterCelShadowB(
+		TEXT("r.TrueSyncEndfieldShading.CharacterCelShadowB"), 0.88f,
+		TEXT("Character cel shadow tint blue channel."),
+		ECVF_RenderThreadSafe);
+
 	static TAutoConsoleVariable<float> CVarCharacterRimIntensity(
 		TEXT("r.TrueSyncEndfieldShading.CharacterRimIntensity"), 0.08f,
 		TEXT("Rim light intensity on character pixels. 0=off."),
@@ -146,6 +210,26 @@ namespace TrueSyncEndfieldShading
 	static TAutoConsoleVariable<float> CVarCharacterRimPower(
 		TEXT("r.TrueSyncEndfieldShading.CharacterRimPower"), 4.0f,
 		TEXT("Rim light falloff exponent on character pixels. Higher = tighter rim."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterDirectionalRimStrength(
+		TEXT("r.TrueSyncEndfieldShading.CharacterDirectionalRimStrength"), 1.0f,
+		TEXT("Blend character rim from camera-only silhouette to key-light-side silhouette. 0=old full rim, 1=directional."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterDirectionalRimLightStart(
+		TEXT("r.TrueSyncEndfieldShading.CharacterDirectionalRimLightStart"), 0.05f,
+		TEXT("Wrapped NdotL value where directional character rim starts."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterDirectionalRimLightEnd(
+		TEXT("r.TrueSyncEndfieldShading.CharacterDirectionalRimLightEnd"), 0.48f,
+		TEXT("Wrapped NdotL value where directional character rim reaches full strength."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarCharacterDirectionalRimLightWrap(
+		TEXT("r.TrueSyncEndfieldShading.CharacterDirectionalRimLightWrap"), 0.10f,
+		TEXT("Wrap added to NdotL for directional character rim. Higher values let rim bleed farther around forms."),
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarCharacterRimR(
@@ -166,16 +250,6 @@ namespace TrueSyncEndfieldShading
 		static TAutoConsoleVariable<float> CVarCharacterWhiteRimPower(
 			TEXT("r.TrueSyncEndfieldShading.CharacterWhiteRimPower"), 2.2f,
 			TEXT("White rim falloff exponent. Lower values make the rim wider."),
-			ECVF_RenderThreadSafe);
-
-		static TAutoConsoleVariable<float> CVarCharacterWhiteRimHaloIntensity(
-			TEXT("r.TrueSyncEndfieldShading.CharacterWhiteRimHaloIntensity"), 0.03f,
-			TEXT("Screen-space white halo intensity just outside character silhouettes."),
-			ECVF_RenderThreadSafe);
-
-		static TAutoConsoleVariable<float> CVarCharacterWhiteRimHaloWidth(
-			TEXT("r.TrueSyncEndfieldShading.CharacterWhiteRimHaloWidth"), 2.0f,
-			TEXT("Screen-space white halo sample width in pixels."),
 			ECVF_RenderThreadSafe);
 
 		static TAutoConsoleVariable<float> CVarCharacterWhiteRimR(
@@ -221,6 +295,51 @@ namespace TrueSyncEndfieldShading
 		TEXT("Cool (cyan-blue) color shift applied to environment. 0=off."),
 		ECVF_RenderThreadSafe);
 
+	static TAutoConsoleVariable<float> CVarEnvCelShadingStrength(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadingStrength"), 0.18f,
+		TEXT("Strength of key-light cel shadow bands on environment pixels. 0=off."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowThreshold(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowThreshold"), 0.40f,
+		TEXT("NdotL threshold where environment cel shadows start."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowSoftness(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowSoftness"), 0.18f,
+		TEXT("Softness around the environment cel shadow threshold."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowDepth(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowDepth"), 0.18f,
+		TEXT("How dark the environment cel shadow band can become."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowR(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowR"), 0.68f,
+		TEXT("Environment cel shadow tint red channel."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowG(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowG"), 0.74f,
+		TEXT("Environment cel shadow tint green channel."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelShadowB(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelShadowB"), 0.84f,
+		TEXT("Environment cel shadow tint blue channel."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelFadeStartDistance(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelFadeStartDistance"), 4500.0f,
+		TEXT("Distance where environment cel bands start fading out to avoid far-grid shimmer/stripes."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarEnvCelFadeEndDistance(
+		TEXT("r.TrueSyncEndfieldShading.EnvCelFadeEndDistance"), 13000.0f,
+		TEXT("Distance where environment cel bands are fully faded out."),
+		ECVF_RenderThreadSafe);
+
 	static TAutoConsoleVariable<float> CVarEnvRimIntensity(
 		TEXT("r.TrueSyncEndfieldShading.EnvRimIntensity"), 0.015f,
 		TEXT("Rim light intensity on environment pixels. 0=off."),
@@ -246,13 +365,18 @@ namespace TrueSyncEndfieldShading
 		TEXT("HDR white rim on bright reflective environment pixels. Separate from shadow/sky-light edge lift."),
 		ECVF_RenderThreadSafe);
 
+	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimIntensityScale(
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimIntensityScale"), 2.0f,
+		TEXT("Additional scale for background white rim. Lower values reduce temporal flicker on bright repeated surfaces."),
+		ECVF_RenderThreadSafe);
+
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimPower(
 		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimPower"), 2.2f,
 		TEXT("Background white rim falloff exponent. Lower values make the highlight wider."),
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimSurfaceStrength(
-		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimSurfaceStrength"), 0.45f,
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimSurfaceStrength"), 0.28f,
 		TEXT("How much bright reflective background surfaces can glow even when the depth/normal edge mask is weak."),
 		ECVF_RenderThreadSafe);
 
@@ -267,8 +391,18 @@ namespace TrueSyncEndfieldShading
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimHighlightContrast(
-		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimHighlightContrast"), 3.0f,
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimHighlightContrast"), 1.5f,
 		TEXT("How much local bright-on-dark contrast contributes to the background white rim."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimFadeStartDistance(
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimFadeStartDistance"), 3500.0f,
+		TEXT("Distance where background white rim starts fading out to avoid bright repeated grid streaks."),
+		ECVF_RenderThreadSafe);
+
+	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimFadeEndDistance(
+		TEXT("r.TrueSyncEndfieldShading.BackgroundWhiteRimFadeEndDistance"), 11000.0f,
+		TEXT("Distance where background white rim is fully faded out."),
 		ECVF_RenderThreadSafe);
 
 	static TAutoConsoleVariable<float> CVarBackgroundWhiteRimR(
@@ -561,12 +695,33 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 			TrueSyncEndfieldShading::CVarCustomDepthCharacterFallback.GetValueOnRenderThread() != 0 ? 1.0f : 0.0f;
 		PassParameters->CustomDepthFallbackThreshold =
 			TrueSyncEndfieldShading::CVarCustomDepthFallbackThreshold.GetValueOnRenderThread();
+		PassParameters->KeyLightDirection = TrueSyncEndfieldShading::GetKeyLightDirectionOnRenderThread();
 
 		// Zone B — 캐릭터
 	PassParameters->CharacterContrastBoost   = TrueSyncEndfieldShading::CVarCharacterContrastBoost.GetValueOnRenderThread();
 	PassParameters->CharacterSaturationBoost = TrueSyncEndfieldShading::CVarCharacterSaturationBoost.GetValueOnRenderThread();
+	PassParameters->CharacterCelShadingStrength =
+		TrueSyncEndfieldShading::CVarCharacterCelShadingStrength.GetValueOnRenderThread();
+	PassParameters->CharacterCelShadowThreshold =
+		TrueSyncEndfieldShading::CVarCharacterCelShadowThreshold.GetValueOnRenderThread();
+	PassParameters->CharacterCelShadowSoftness =
+		TrueSyncEndfieldShading::CVarCharacterCelShadowSoftness.GetValueOnRenderThread();
+	PassParameters->CharacterCelShadowDepth =
+		TrueSyncEndfieldShading::CVarCharacterCelShadowDepth.GetValueOnRenderThread();
+	PassParameters->CharacterCelShadowTint = FVector3f(
+		TrueSyncEndfieldShading::CVarCharacterCelShadowR.GetValueOnRenderThread(),
+		TrueSyncEndfieldShading::CVarCharacterCelShadowG.GetValueOnRenderThread(),
+		TrueSyncEndfieldShading::CVarCharacterCelShadowB.GetValueOnRenderThread());
 	PassParameters->CharacterRimIntensity    = TrueSyncEndfieldShading::CVarCharacterRimIntensity.GetValueOnRenderThread();
 	PassParameters->CharacterRimPower        = TrueSyncEndfieldShading::CVarCharacterRimPower.GetValueOnRenderThread();
+	PassParameters->CharacterDirectionalRimStrength =
+		TrueSyncEndfieldShading::CVarCharacterDirectionalRimStrength.GetValueOnRenderThread();
+	PassParameters->CharacterDirectionalRimLightStart =
+		TrueSyncEndfieldShading::CVarCharacterDirectionalRimLightStart.GetValueOnRenderThread();
+	PassParameters->CharacterDirectionalRimLightEnd =
+		TrueSyncEndfieldShading::CVarCharacterDirectionalRimLightEnd.GetValueOnRenderThread();
+	PassParameters->CharacterDirectionalRimLightWrap =
+		TrueSyncEndfieldShading::CVarCharacterDirectionalRimLightWrap.GetValueOnRenderThread();
 		PassParameters->CharacterRimColor        = FVector3f(
 			TrueSyncEndfieldShading::CVarCharacterRimR.GetValueOnRenderThread(),
 			TrueSyncEndfieldShading::CVarCharacterRimG.GetValueOnRenderThread(),
@@ -575,10 +730,6 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 			TrueSyncEndfieldShading::CVarCharacterWhiteRimIntensity.GetValueOnRenderThread();
 		PassParameters->CharacterWhiteRimPower =
 			TrueSyncEndfieldShading::CVarCharacterWhiteRimPower.GetValueOnRenderThread();
-		PassParameters->CharacterWhiteRimHaloIntensity =
-			TrueSyncEndfieldShading::CVarCharacterWhiteRimHaloIntensity.GetValueOnRenderThread();
-		PassParameters->CharacterWhiteRimHaloWidth =
-			TrueSyncEndfieldShading::CVarCharacterWhiteRimHaloWidth.GetValueOnRenderThread();
 		PassParameters->CharacterWhiteRimColor = FVector3f(
 			TrueSyncEndfieldShading::CVarCharacterWhiteRimR.GetValueOnRenderThread(),
 			TrueSyncEndfieldShading::CVarCharacterWhiteRimG.GetValueOnRenderThread(),
@@ -595,6 +746,22 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 		// Zone C — 환경
 	PassParameters->EnvDesaturation = TrueSyncEndfieldShading::CVarEnvDesaturation.GetValueOnRenderThread();
 	PassParameters->EnvCoolShift    = TrueSyncEndfieldShading::CVarEnvCoolShift.GetValueOnRenderThread();
+	PassParameters->EnvCelShadingStrength =
+		TrueSyncEndfieldShading::CVarEnvCelShadingStrength.GetValueOnRenderThread();
+	PassParameters->EnvCelShadowThreshold =
+		TrueSyncEndfieldShading::CVarEnvCelShadowThreshold.GetValueOnRenderThread();
+	PassParameters->EnvCelShadowSoftness =
+		TrueSyncEndfieldShading::CVarEnvCelShadowSoftness.GetValueOnRenderThread();
+	PassParameters->EnvCelShadowDepth =
+		TrueSyncEndfieldShading::CVarEnvCelShadowDepth.GetValueOnRenderThread();
+	PassParameters->EnvCelShadowTint = FVector3f(
+		TrueSyncEndfieldShading::CVarEnvCelShadowR.GetValueOnRenderThread(),
+		TrueSyncEndfieldShading::CVarEnvCelShadowG.GetValueOnRenderThread(),
+		TrueSyncEndfieldShading::CVarEnvCelShadowB.GetValueOnRenderThread());
+	PassParameters->EnvCelFadeStartDistance =
+		TrueSyncEndfieldShading::CVarEnvCelFadeStartDistance.GetValueOnRenderThread();
+	PassParameters->EnvCelFadeEndDistance =
+		TrueSyncEndfieldShading::CVarEnvCelFadeEndDistance.GetValueOnRenderThread();
 	PassParameters->EnvRimIntensity = TrueSyncEndfieldShading::CVarEnvRimIntensity.GetValueOnRenderThread();
 	PassParameters->EnvRimPower     = TrueSyncEndfieldShading::CVarEnvRimPower.GetValueOnRenderThread();
 	PassParameters->EnvRimColor     = FVector3f(
@@ -603,6 +770,8 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 		TrueSyncEndfieldShading::CVarEnvRimB.GetValueOnRenderThread());
 	PassParameters->BackgroundWhiteRimIntensity =
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimIntensity.GetValueOnRenderThread();
+	PassParameters->BackgroundWhiteRimIntensityScale =
+		TrueSyncEndfieldShading::CVarBackgroundWhiteRimIntensityScale.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimPower =
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimPower.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimSurfaceStrength =
@@ -613,6 +782,10 @@ FScreenPassTexture FTrueSyncEndfieldShadingSceneViewExtension::ApplyEndfieldPass
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimLumaEnd.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimHighlightContrast =
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimHighlightContrast.GetValueOnRenderThread();
+	PassParameters->BackgroundWhiteRimFadeStartDistance =
+		TrueSyncEndfieldShading::CVarBackgroundWhiteRimFadeStartDistance.GetValueOnRenderThread();
+	PassParameters->BackgroundWhiteRimFadeEndDistance =
+		TrueSyncEndfieldShading::CVarBackgroundWhiteRimFadeEndDistance.GetValueOnRenderThread();
 	PassParameters->BackgroundWhiteRimColor = FVector3f(
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimR.GetValueOnRenderThread(),
 		TrueSyncEndfieldShading::CVarBackgroundWhiteRimG.GetValueOnRenderThread(),
