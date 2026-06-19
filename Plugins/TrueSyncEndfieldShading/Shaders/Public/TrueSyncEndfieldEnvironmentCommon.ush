@@ -1,0 +1,182 @@
+#ifndef TSE_ENVIRONMENT_COMMON_USH
+#define TSE_ENVIRONMENT_COMMON_USH
+
+#include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldMaterialGraphCommon.ush"
+
+// -----------------------------------------------------------------------------
+// TrueSyncEndfieldEnvironmentCommon.ush
+//
+// Endfield 계열 산업 환경 룩을 위한 보조 함수 모음입니다.
+//
+// 목표:
+// - 재질의 기반은 PBR 위에 둔다.
+// - 미세한 노이즈성 디테일은 줄인다.
+// - 작은 명암 변화보다 큰 빛 덩어리가 읽히게 만든다.
+// - 원거리 painterly 처리의 큰 방향은 후처리 패스에 맡긴다.
+// -----------------------------------------------------------------------------
+
+float TSE_DistanceFade(float CameraDistance, float StartDistance, float EndDistance)
+{
+	return saturate((CameraDistance - StartDistance) / max(EndDistance - StartDistance, 1.0f));
+}
+
+float TSE_EnvironmentWrappedLighting(float NdotL, float Wrap)
+{
+	return saturate((NdotL + Wrap) / (1.0f + Wrap));
+}
+
+float TSE_EnvironmentSoftDiffuseMask(float NdotL, float Wrap, float Threshold, float Softness)
+{
+	const float WrappedLighting = TSE_EnvironmentWrappedLighting(NdotL, Wrap);
+	const float HalfSoftness = max(Softness * 0.5f, 1e-4f);
+	return smoothstep(Threshold - HalfSoftness, Threshold + HalfSoftness, WrappedLighting);
+}
+
+float3 TSE_EnvironmentShadowedColor(
+	float3 BaseColor,
+	float NdotL,
+	float AO,
+	float Wrap,
+	float Threshold,
+	float Softness,
+	float3 ShadowTint)
+{
+	const float LitMask = TSE_EnvironmentSoftDiffuseMask(
+		saturate(NdotL) * saturate(AO),
+		Wrap,
+		Threshold,
+		Softness);
+
+	return lerp(BaseColor * ShadowTint, BaseColor, LitMask);
+}
+
+float3 TSE_FlattenNormalTS(float3 NormalTS, float FlattenAmount)
+{
+	const float3 SafeNormal = normalize(float3(NormalTS.xy, max(NormalTS.z, 1e-4f)));
+	return normalize(lerp(SafeNormal, float3(0.0f, 0.0f, 1.0f), saturate(FlattenAmount)));
+}
+
+float3 TSE_FlattenNormalTSByDistance(
+	float3 NormalTS,
+	float CameraDistance,
+	float StartDistance,
+	float EndDistance,
+	float MaxFlattenAmount)
+{
+	const float DistanceFade = TSE_DistanceFade(CameraDistance, StartDistance, EndDistance);
+	return TSE_FlattenNormalTS(NormalTS, DistanceFade * saturate(MaxFlattenAmount));
+}
+
+float TSE_RemapRoughnessRange(float Roughness, float MinRoughness, float MaxRoughness)
+{
+	return lerp(MinRoughness, MaxRoughness, saturate(Roughness));
+}
+
+float3 TSE_CompressAlbedoContrast(float3 BaseColor, float CompressionStrength)
+{
+	const float Luma = dot(BaseColor, float3(0.299f, 0.587f, 0.114f));
+	return lerp(BaseColor, Luma.xxx, saturate(CompressionStrength));
+}
+
+float TSE_MacroAO(
+	float TextureAO,
+	float VertexAO,
+	float DirtMask,
+	float ContactStrength)
+{
+	const float CombinedAO = saturate(TextureAO) * lerp(1.0f, saturate(VertexAO), 0.65f);
+	const float DirtAO = lerp(1.0f, saturate(DirtMask), saturate(ContactStrength));
+	return saturate(CombinedAO * DirtAO);
+}
+
+float3 TSE_EndfieldLayeredEnvironmentColor(
+	float3 BaseColor,
+	float NdotL,
+	float TextureAO,
+	float VertexAO,
+	float DirtMask,
+	float3 ShadowTint,
+	float DiffuseWrap,
+	float DiffuseThreshold,
+	float DiffuseSoftness,
+	float AlbedoCompression,
+	float ContactStrength)
+{
+	const float MacroAO = TSE_MacroAO(TextureAO, VertexAO, DirtMask, ContactStrength);
+	const float3 CompressedBaseColor = TSE_CompressAlbedoContrast(BaseColor, AlbedoCompression);
+	return TSE_EnvironmentShadowedColor(
+		CompressedBaseColor,
+		NdotL,
+		MacroAO,
+		DiffuseWrap,
+		DiffuseThreshold,
+		DiffuseSoftness,
+		ShadowTint);
+}
+
+float3 TSE_IndustrialSurfaceColor(
+	float3 BaseColor,
+	float NdotL,
+	float AO,
+	float3 ShadowTint,
+	float DiffuseWrap,
+	float DiffuseThreshold,
+	float DiffuseSoftness,
+	float AlbedoCompression)
+{
+	const float3 CompressedBaseColor = TSE_CompressAlbedoContrast(BaseColor, AlbedoCompression);
+
+	return TSE_EnvironmentShadowedColor(
+		CompressedBaseColor,
+		NdotL,
+		AO,
+		DiffuseWrap,
+		DiffuseThreshold,
+		DiffuseSoftness,
+		ShadowTint);
+}
+
+float3 TSE_RockSurfaceColor(
+	float3 BaseColor,
+	float NdotL,
+	float AO,
+	float3 ShadowTint,
+	float DiffuseWrap,
+	float DiffuseThreshold,
+	float DiffuseSoftness,
+	float AlbedoCompression)
+{
+	const float3 CompressedBaseColor = TSE_CompressAlbedoContrast(BaseColor, AlbedoCompression * 0.85f);
+
+	return TSE_EnvironmentShadowedColor(
+		CompressedBaseColor,
+		NdotL,
+		AO,
+		DiffuseWrap,
+		DiffuseThreshold,
+		DiffuseSoftness,
+		ShadowTint);
+}
+
+float3 TSE_EnvironmentGraphCel(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 LightDirWS,
+	float CelStrength,
+	float CelThreshold,
+	float CelSoftness,
+	float CelShadowDepth,
+	float3 CelShadowTint)
+{
+	return TSE_MG_ApplyCelShadowBand(
+		BaseColor,
+		NormalWS,
+		LightDirWS,
+		CelStrength,
+		CelThreshold,
+		CelSoftness,
+		CelShadowDepth,
+		CelShadowTint);
+}
+
+#endif

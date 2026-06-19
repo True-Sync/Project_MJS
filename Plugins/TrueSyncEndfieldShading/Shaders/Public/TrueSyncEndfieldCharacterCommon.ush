@@ -1,0 +1,170 @@
+#ifndef TSE_CHARACTER_COMMON_USH
+#define TSE_CHARACTER_COMMON_USH
+
+#include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldMaterialGraphCommon.ush"
+
+// -----------------------------------------------------------------------------
+// TrueSyncEndfieldCharacterCommon.ush
+//
+// Endfield 계열 stylized PBR/NPR 흐름을 연구하기 위한 캐릭터용 보조 함수입니다.
+// 주로 머티리얼 Custom 노드나, 나중에 함수 자산으로 옮길 로직의 원형으로 쓸 수 있게
+// 정리한 파일입니다.
+//
+// 목표:
+// - 피부는 부드러운 toon 계열 전이를 유지한다.
+// - 머리카락은 현실적인 날카로운 스펙큘러 대신 stylized highlight band를 쓴다.
+// - 의상과 장비는 PBR 기반을 유지하되 roughness/spec 반응을 통제한다.
+// -----------------------------------------------------------------------------
+
+float3 TSE_SafeNormalize(float3 InVector, float3 Fallback)
+{
+	const float LengthSquared = dot(InVector, InVector);
+	return LengthSquared > 1e-6f ? InVector * rsqrt(LengthSquared) : Fallback;
+}
+
+float TSE_SoftRamp(float NdotL, float Threshold, float Softness)
+{
+	const float HalfSoftness = max(Softness * 0.5f, 1e-4f);
+	return smoothstep(Threshold - HalfSoftness, Threshold + HalfSoftness, NdotL);
+}
+
+float3 TSE_ApplyShadowTint(float3 BaseColor, float3 ShadowTint, float LitMask)
+{
+	return lerp(BaseColor * ShadowTint, BaseColor, saturate(LitMask));
+}
+
+float3 TSE_SkinDiffuse(
+	float3 BaseColor,
+	float NdotL,
+	float ShadowThreshold,
+	float ShadowSoftness,
+	float3 ShadowTint,
+	float Occlusion)
+{
+	const float LitMask = TSE_SoftRamp(
+		saturate(NdotL) * saturate(Occlusion),
+		ShadowThreshold,
+		ShadowSoftness);
+
+	return TSE_ApplyShadowTint(BaseColor, ShadowTint, LitMask);
+}
+
+float TSE_HairHighlightMask(
+	float3 NormalWS,
+	float3 TangentWS,
+	float3 LightDirWS,
+	float3 ViewDirWS,
+	float Shift,
+	float Width,
+	float Softness)
+{
+	const float3 SafeNormal = TSE_SafeNormalize(NormalWS, float3(0.0f, 0.0f, 1.0f));
+	const float3 SafeTangent = TSE_SafeNormalize(TangentWS, float3(1.0f, 0.0f, 0.0f));
+	const float3 Binormal = TSE_SafeNormalize(cross(SafeNormal, SafeTangent), float3(0.0f, 1.0f, 0.0f));
+	const float3 HalfVector = TSE_SafeNormalize(LightDirWS + ViewDirWS, SafeNormal);
+
+	// 하이라이트 밴드를 머리카락 결 방향을 따라 배치해서,
+	// 날카로운 거울 반사보다는 작가가 그린 애니풍 하이라이트처럼 읽히게 만든다.
+	const float BandPosition = dot(Binormal, HalfVector) + Shift;
+	return 1.0f - smoothstep(Width, Width + max(Softness, 1e-4f), abs(BandPosition));
+}
+
+float3 TSE_HairHighlight(
+	float3 BaseColor,
+	float3 HighlightColor,
+	float HighlightMask,
+	float HighlightIntensity)
+{
+	return BaseColor + HighlightColor * saturate(HighlightMask) * HighlightIntensity;
+}
+
+float TSE_MaterialRimMask(
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float Power,
+	float Bias)
+{
+	const float3 SafeNormal = TSE_SafeNormalize(NormalWS, float3(0.0f, 0.0f, 1.0f));
+	const float3 SafeViewDir = TSE_SafeNormalize(ViewDirWS, float3(0.0f, 0.0f, 1.0f));
+	const float NdotV = saturate(dot(SafeNormal, SafeViewDir));
+	return pow(saturate(1.0f - NdotV + Bias), max(Power, 0.1f));
+}
+
+float3 TSE_ApplyMaterialRim(
+	float3 Color,
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 RimColor,
+	float RimIntensity,
+	float RimPower,
+	float RimBias)
+{
+	return Color + RimColor
+		* TSE_MaterialRimMask(NormalWS, ViewDirWS, RimPower, RimBias)
+		* max(RimIntensity, 0.0f);
+}
+
+float TSE_RemapRoughness(float Roughness, float MinRoughness, float MaxRoughness)
+{
+	return lerp(MinRoughness, MaxRoughness, saturate(Roughness));
+}
+
+float3 TSE_StylizedSpecular(
+	float3 F0,
+	float Roughness,
+	float NdotH,
+	float Intensity)
+{
+	// roughness가 낮을수록 좁고 강한 밴드가 나오고,
+	// roughness가 높을수록 더 퍼진 하이라이트가 된다.
+	const float Exponent = lerp(64.0f, 8.0f, saturate(Roughness));
+	const float SpecMask = pow(saturate(NdotH), Exponent) * Intensity;
+	return F0 * SpecMask;
+}
+
+float3 TSE_ApplyPartLightingControl(
+	float3 BaseColor,
+	float3 ShadowedColor,
+	float PartMask)
+{
+	return lerp(BaseColor, ShadowedColor, saturate(PartMask));
+}
+
+float3 TSE_CharacterGraphCelRim(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 LightDirWS,
+	float CelStrength,
+	float CelThreshold,
+	float CelSoftness,
+	float CelShadowDepth,
+	float3 CelShadowTint,
+	float3 RimColor,
+	float RimIntensity,
+	float RimPower,
+	float RimLightStart,
+	float RimLightEnd,
+	float RimLightWrap,
+	float DirectionalRimStrength)
+{
+	return TSE_MG_ApplyCelAndDirectionalRim(
+		BaseColor,
+		NormalWS,
+		ViewDirWS,
+		LightDirWS,
+		CelStrength,
+		CelThreshold,
+		CelSoftness,
+		CelShadowDepth,
+		CelShadowTint,
+		RimColor,
+		RimIntensity,
+		RimPower,
+		RimLightStart,
+		RimLightEnd,
+		RimLightWrap,
+		DirectionalRimStrength);
+}
+
+#endif

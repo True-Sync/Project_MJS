@@ -1,0 +1,21 @@
+{
+	"FileVersion": 3,
+	"Version": 1,
+	"VersionName": "0.1.0",
+	"FriendlyName": "TrueSync Endfield Shading",
+	"Description": "Endfield-oriented stylized PBR/NPR post-processing and shading support using SceneViewExtension, RDG, and global shaders.",
+	"Category": "Rendering",
+	"CanContainContent": true,
+	"EnabledByDefault": true,
+	"Installed": false,
+	"Modules": [
+		{
+			"Name": "TrueSyncEndfieldShading",
+			"Type": "Runtime",
+			"LoadingPhase": "PostConfigInit",
+			"TargetDenyList": [
+				"Server"
+			]
+		}
+	]
+}
