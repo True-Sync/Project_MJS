@@ -1,0 +1,133 @@
+#ifndef TSE_MATERIAL_GRAPH_COMMON_USH
+#define TSE_MATERIAL_GRAPH_COMMON_USH
+
+// Helper functions intended for Unreal material graph Custom nodes.
+// Include with:
+// #include "/Plugin/TrueSyncEndfieldShading/Public/TrueSyncEndfieldMaterialGraphCommon.ush"
+
+float3 TSE_MG_SafeNormalize(float3 V, float3 Fallback)
+{
+	const float LenSq = dot(V, V);
+	return LenSq > 1e-6f ? V * rsqrt(LenSq) : Fallback;
+}
+
+float TSE_MG_Luma(float3 Color)
+{
+	return dot(Color, float3(0.299f, 0.587f, 0.114f));
+}
+
+float TSE_MG_SoftBand(float Value, float Threshold, float Softness)
+{
+	const float HalfSoftness = max(Softness * 0.5f, 1e-4f);
+	return smoothstep(Threshold - HalfSoftness, Threshold + HalfSoftness, Value);
+}
+
+float TSE_MG_LightBand(float3 NormalWS, float3 LightDirWS, float Threshold, float Softness)
+{
+	const float3 N = TSE_MG_SafeNormalize(NormalWS, float3(0.0f, 0.0f, 1.0f));
+	const float3 L = TSE_MG_SafeNormalize(LightDirWS, float3(-0.35f, -0.45f, 0.82f));
+	return TSE_MG_SoftBand(saturate(dot(N, L)), Threshold, Softness);
+}
+
+float3 TSE_MG_ApplyCelShadowBand(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 LightDirWS,
+	float Strength,
+	float Threshold,
+	float Softness,
+	float ShadowDepth,
+	float3 ShadowTint)
+{
+	const float LitMask = TSE_MG_LightBand(NormalWS, LightDirWS, Threshold, Softness);
+	const float ShadowAmount = (1.0f - LitMask) * saturate(Strength) * saturate(ShadowDepth);
+	return lerp(BaseColor, BaseColor * max(ShadowTint, 0.0f.xxx), ShadowAmount);
+}
+
+float TSE_MG_DirectionalRimMask(
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 LightDirWS,
+	float RimPower,
+	float LightStart,
+	float LightEnd,
+	float LightWrap,
+	float DirectionalStrength)
+{
+	const float3 N = TSE_MG_SafeNormalize(NormalWS, float3(0.0f, 0.0f, 1.0f));
+	const float3 V = TSE_MG_SafeNormalize(ViewDirWS, float3(0.0f, 0.0f, 1.0f));
+	const float3 L = TSE_MG_SafeNormalize(LightDirWS, float3(-0.35f, -0.45f, 0.82f));
+	const float Rim = pow(1.0f - saturate(dot(N, V)), max(RimPower, 0.1f));
+	const float Wrap = max(LightWrap, 0.0f);
+	const float WrappedNdotL = saturate((dot(N, L) + Wrap) / (1.0f + Wrap));
+	const float LightMask = smoothstep(LightStart, max(LightEnd, LightStart + 1e-4f), WrappedNdotL);
+	return Rim * lerp(1.0f, LightMask, saturate(DirectionalStrength));
+}
+
+float3 TSE_MG_ApplyDirectionalRim(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 LightDirWS,
+	float3 RimColor,
+	float RimIntensity,
+	float RimPower,
+	float LightStart,
+	float LightEnd,
+	float LightWrap,
+	float DirectionalStrength)
+{
+	const float RimMask = TSE_MG_DirectionalRimMask(
+		NormalWS,
+		ViewDirWS,
+		LightDirWS,
+		RimPower,
+		LightStart,
+		LightEnd,
+		LightWrap,
+		DirectionalStrength);
+	return BaseColor + RimColor * RimMask * max(RimIntensity, 0.0f);
+}
+
+float3 TSE_MG_ApplyCelAndDirectionalRim(
+	float3 BaseColor,
+	float3 NormalWS,
+	float3 ViewDirWS,
+	float3 LightDirWS,
+	float CelStrength,
+	float CelThreshold,
+	float CelSoftness,
+	float CelShadowDepth,
+	float3 CelShadowTint,
+	float3 RimColor,
+	float RimIntensity,
+	float RimPower,
+	float RimLightStart,
+	float RimLightEnd,
+	float RimLightWrap,
+	float DirectionalRimStrength)
+{
+	const float3 CelColor = TSE_MG_ApplyCelShadowBand(
+		BaseColor,
+		NormalWS,
+		LightDirWS,
+		CelStrength,
+		CelThreshold,
+		CelSoftness,
+		CelShadowDepth,
+		CelShadowTint);
+	return TSE_MG_ApplyDirectionalRim(
+		CelColor,
+		NormalWS,
+		ViewDirWS,
+		LightDirWS,
+		RimColor,
+		RimIntensity,
+		RimPower,
+		RimLightStart,
+		RimLightEnd,
+		RimLightWrap,
+		DirectionalRimStrength);
+}
+
+#endif

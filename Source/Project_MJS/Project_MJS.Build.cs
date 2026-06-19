@@ -8,7 +8,21 @@ public class Project_MJS : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
-		PublicDependencyModuleNames.AddRange(new string[] { "Core", "CoreUObject", "Engine", "InputCore", "EnhancedInput" });
+		PublicDependencyModuleNames.AddRange(new string[]
+		{
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"InputCore",
+			"EnhancedInput",
+			"FMODStudio",
+			"LevelSequence",
+			"MovieScene",
+			"MovieSceneTracks",
+			"CinematicCamera",
+			"Niagara",
+			"AIModule"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 

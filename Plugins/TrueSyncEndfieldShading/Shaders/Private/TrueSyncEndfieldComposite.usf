@@ -1,0 +1,936 @@
+#define NEEDS_SCENE_TEXTURES 1
+
+#include "/Engine/Private/Common.ush"
+#include "/Engine/Private/ScreenPass.ush"
+#include "/Engine/Private/SceneTexturesCommon.ush"
+#include "/Engine/Private/SceneTextureParameters.ush"
+
+// -----------------------------------------------------------------------------
+// TrueSyncEndfieldComposite.usf
+//
+// Arknights: Endfield 스타일 포스트 프로세스 패스.
+//
+// 설계 원칙:
+//   픽셀을 먼저 3개 존으로 분류한 뒤, 각 존에 최소한의 효과만 적용.
+//   전체에 일괄 적용 후 억제하는 방식을 버림 → 폴리곤 아티팩트 구조적 제거.
+//
+// Zone A │ 스카이    │ LinearDepth >= SkyDepthThreshold → 완전 무처리
+// Zone B │ 캐릭터    │ CustomStencil == CharacterStencilValue
+//         │           │   → 콘트라스트/채도 부스트 + 림라이트
+// Zone C │ 환경/배경 │ 나머지 모든 픽셀
+//         │           │   → 미세 색 보정 + 거리 Haze + 림라이트
+//
+// 아웃라인: CustomStencil 기반의 얇은 스크린 스페이스 캐릭터 실루엣을 지원.
+// -----------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Viewport / 입력 텍스처
+// ---------------------------------------------------------------------------
+SCREEN_PASS_TEXTURE_VIEWPORT(InputViewport)
+
+Texture2D InputSceneColorTexture;
+SamplerState InputSceneColorSampler;
+
+// ---------------------------------------------------------------------------
+// 존 분류 파라미터
+// ---------------------------------------------------------------------------
+float SkyDepthThreshold;
+float CharacterStencilEnabled;
+float CharacterStencilValue;
+float SkinStencilValue;
+float FaceStencilValue;
+float HairStencilValue;
+float ClothStencilValue;
+float MetalGearStencilValue;
+float TerrainStencilValue;
+float IndustrialMetalStencilValue;
+float ConcreteStencilValue;
+float VFXStencilValue;
+float UseMaterialStencilPalette;
+float CustomDepthCharacterFallback;
+float CustomDepthFallbackThreshold;
+float3 KeyLightDirection;
+
+// ---------------------------------------------------------------------------
+// Zone B — 캐릭터
+// ---------------------------------------------------------------------------
+float CharacterContrastBoost;
+float CharacterSaturationBoost;
+float CharacterCelShadingStrength;
+float CharacterCelShadowThreshold;
+float CharacterCelShadowSoftness;
+float CharacterCelShadowDepth;
+float3 CharacterCelShadowTint;
+float CharacterRimIntensity;
+float CharacterRimPower;
+float CharacterDirectionalRimStrength;
+float CharacterDirectionalRimLightStart;
+float CharacterDirectionalRimLightEnd;
+float CharacterDirectionalRimLightWrap;
+float3 CharacterRimColor;
+float CharacterWhiteRimIntensity;
+float CharacterWhiteRimPower;
+float3 CharacterWhiteRimColor;
+float CharacterOutlineIntensity;
+float CharacterOutlineWidth;
+float3 CharacterOutlineColor;
+
+// ---------------------------------------------------------------------------
+// Zone C — 환경/배경
+// ---------------------------------------------------------------------------
+float EnvDesaturation;
+float EnvCoolShift;
+float EnvCelShadingStrength;
+float EnvCelShadowThreshold;
+float EnvCelShadowSoftness;
+float EnvCelShadowDepth;
+float3 EnvCelShadowTint;
+float EnvCelFadeStartDistance;
+float EnvCelFadeEndDistance;
+float EnvRimIntensity;
+float EnvRimPower;
+float3 EnvRimColor;
+float BackgroundWhiteRimIntensity;
+float BackgroundWhiteRimIntensityScale;
+float BackgroundWhiteRimPower;
+float BackgroundWhiteRimSurfaceStrength;
+float BackgroundWhiteRimLumaStart;
+float BackgroundWhiteRimLumaEnd;
+float BackgroundWhiteRimHighlightContrast;
+float BackgroundWhiteRimFadeStartDistance;
+float BackgroundWhiteRimFadeEndDistance;
+float3 BackgroundWhiteRimColor;
+float EnvShadowDensity;
+float EnvShadowLumaStart;
+float EnvShadowLumaEnd;
+float EnvShadowHazeSuppression;
+float3 EnvShadowTint;
+float ForwardDepthRimIntensity;
+float ForwardDepthRimThreshold;
+
+// ---------------------------------------------------------------------------
+// Haze (환경에만 적용)
+// ---------------------------------------------------------------------------
+float HazeStartDistance;
+float HazeEndDistance;
+float HazeIntensity;
+float HazeTintStrength;
+float3 HazeTint;
+
+// ---------------------------------------------------------------------------
+// Interior Volume 보정
+// ---------------------------------------------------------------------------
+float InteriorBlend;
+float InteriorHazeMultiplier;
+float InteriorCoolShiftMultiplier;
+float InteriorDesaturationMultiplier;
+float InteriorContrast;
+
+// ---------------------------------------------------------------------------
+// 디버그
+// ---------------------------------------------------------------------------
+float DebugZoneMask;
+float DebugBackgroundWhiteRim;
+
+// ===========================================================================
+// 공통 유틸
+// ===========================================================================
+
+float TSE_Luma(float3 C)
+{
+	return dot(C, float3(0.299f, 0.587f, 0.114f));
+}
+
+float3 TSE_SafeNormalize(float3 V, float3 Fallback)
+{
+	const float LenSq = dot(V, V);
+	return LenSq > 1e-6f ? V * rsqrt(LenSq) : Fallback;
+}
+
+float3 TSE_KeyLightDirection()
+{
+	return TSE_SafeNormalize(KeyLightDirection, float3(-0.35f, -0.45f, 0.82f));
+}
+
+float TSE_GetPreExposure()
+{
+	return max(ResolvedView.PreExposure, 1e-4f);
+}
+
+float3 TSE_ToStyleColor(float3 SceneColor)
+{
+	return SceneColor / TSE_GetPreExposure();
+}
+
+float3 TSE_ToSceneColor(float3 StyleColor)
+{
+	return StyleColor * TSE_GetPreExposure();
+}
+
+float3 TSE_Desaturate(float3 C, float Amount)
+{
+	return lerp(C, TSE_Luma(C).xxx, saturate(Amount));
+}
+
+float3 TSE_PerceptualColor(float3 C)
+{
+	const float3 SafeColor = max(C, 0.0f.xxx);
+	return SafeColor / (1.0f.xxx + SafeColor);
+}
+
+float3 TSE_PerceptualDecode(float3 C)
+{
+	const float3 SafeColor = clamp(C, 0.0f.xxx, 0.995f.xxx);
+	return SafeColor / max(1.0f.xxx - SafeColor, 1e-4f.xxx);
+}
+
+float3 TSE_ContrastMidGray(float3 C, float Contrast)
+{
+	const float3 Perceptual = TSE_PerceptualColor(C);
+	const float3 Adjusted = saturate((Perceptual - 0.5f) * Contrast + 0.5f);
+	return TSE_PerceptualDecode(Adjusted);
+}
+
+float3 TSE_PerceptualHaze(float3 Color, float3 Tint, float TintStrength)
+{
+	const float3 PerceptualColor = TSE_PerceptualColor(Color);
+	const float3 NeutralHaze = lerp(PerceptualColor, TSE_Luma(PerceptualColor).xxx, 0.20f);
+	const float3 TintedHaze = lerp(NeutralHaze, TSE_PerceptualColor(Tint), saturate(TintStrength));
+	return TSE_PerceptualDecode(TintedHaze);
+}
+
+float TSE_PerceptualLuma(float3 C)
+{
+	return TSE_Luma(TSE_PerceptualColor(C));
+}
+
+float TSE_ShadowMask(float3 C, float LumaStart, float LumaEnd)
+{
+	const float Luma = TSE_PerceptualLuma(C);
+	const float LitRamp = saturate((Luma - LumaStart) / max(LumaEnd - LumaStart, 1e-4f));
+	return 1.0f - smoothstep(0.0f, 1.0f, LitRamp);
+}
+
+float TSE_DistanceFadeOut(float LinearDepth, float FadeStart, float FadeEnd)
+{
+	return 1.0f - smoothstep(FadeStart, max(FadeEnd, FadeStart + 1.0f), LinearDepth);
+}
+
+float3 ApplyEnvironmentShadowDensity(float3 Color, float ShadowMask, float DensityScale)
+{
+	const float Density = saturate(EnvShadowDensity * max(DensityScale, 0.0f));
+	if (Density <= 0.0f)
+	{
+		return Color;
+	}
+
+	const float3 ShadowedColor = Color * EnvShadowTint;
+	return lerp(Color, ShadowedColor, ShadowMask * Density);
+}
+
+float2 GetSceneUV(float4 UVAndScreenPos)
+{
+	return clamp(UVAndScreenPos.xy,
+		InputViewport_UVViewportBilinearMin,
+		InputViewport_UVViewportBilinearMax);
+}
+
+// ===========================================================================
+// 존 분류
+// ===========================================================================
+
+// Sky mask: 캐릭터·환경 구간에서 부드럽게 사라지고 스카이에서 1.0이 됨.
+// 임계값 전후 5% 구간에서 smoothstep 전이.
+float ComputeSkyMask(float LinearDepth)
+{
+	const float FadeStart = SkyDepthThreshold * 0.95f;
+	const float FadeEnd   = SkyDepthThreshold;
+	return smoothstep(FadeStart, FadeEnd, LinearDepth);
+}
+
+struct FTrueSyncEndfieldZoneMasks
+{
+	float Sky;
+	float Character;
+	float Environment;
+	float Skin;
+	float Face;
+	float Hair;
+	float Cloth;
+	float MetalGear;
+	float Terrain;
+	float IndustrialMetal;
+	float Concrete;
+	float VFX;
+};
+
+uint ReadCustomStencilValue(uint2 PixelPos)
+{
+#if SCENE_TEXTURES_DISABLED
+	return 0u;
+#else
+	return CalcSceneCustomStencil(PixelPos);
+#endif
+}
+
+float ComputeCustomDepthCharacterFallback(float LinearDepth, float2 UV)
+{
+#if SCENE_TEXTURES_DISABLED
+	return 0.0f;
+#else
+	if (CustomDepthCharacterFallback < 0.5f)
+	{
+		return 0.0f;
+	}
+
+	const float CustomDepth = max(CalcSceneCustomDepth(UV), 1.0f);
+	const float DepthDelta = abs(CustomDepth - LinearDepth);
+	const float DepthThreshold = max(CustomDepthFallbackThreshold, 0.1f);
+	const float DepthFeather = max(DepthThreshold * 0.35f, 1.0f);
+	return 1.0f - smoothstep(DepthThreshold, DepthThreshold + DepthFeather, DepthDelta);
+#endif
+}
+
+float StencilEquals(uint StencilValue, float ExpectedValue)
+{
+	return abs((float)StencilValue - ExpectedValue) < 0.5f ? 1.0f : 0.0f;
+}
+
+FTrueSyncEndfieldZoneMasks ComputeZoneMasks(float LinearDepth, float2 UV, uint2 PixelPos)
+{
+	FTrueSyncEndfieldZoneMasks Masks;
+	Masks.Sky = ComputeSkyMask(LinearDepth);
+	Masks.Character = 0.0f;
+	Masks.Environment = 1.0f - Masks.Sky;
+	Masks.Skin = 0.0f;
+	Masks.Face = 0.0f;
+	Masks.Hair = 0.0f;
+	Masks.Cloth = 0.0f;
+	Masks.MetalGear = 0.0f;
+	Masks.Terrain = 0.0f;
+	Masks.IndustrialMetal = 0.0f;
+	Masks.Concrete = 0.0f;
+	Masks.VFX = 0.0f;
+
+	if (CharacterStencilEnabled < 0.5f)
+	{
+		return Masks;
+	}
+
+	const uint StencilValue = ReadCustomStencilValue(PixelPos);
+	const float PaletteEnabled = saturate(UseMaterialStencilPalette);
+
+	const float BaseCharacter = StencilEquals(StencilValue, CharacterStencilValue);
+	Masks.Skin = PaletteEnabled * StencilEquals(StencilValue, SkinStencilValue);
+	Masks.Face = PaletteEnabled * StencilEquals(StencilValue, FaceStencilValue);
+	Masks.Hair = PaletteEnabled * StencilEquals(StencilValue, HairStencilValue);
+	Masks.Cloth = PaletteEnabled * StencilEquals(StencilValue, ClothStencilValue);
+	Masks.MetalGear = PaletteEnabled * StencilEquals(StencilValue, MetalGearStencilValue);
+	Masks.Terrain = PaletteEnabled * StencilEquals(StencilValue, TerrainStencilValue);
+	Masks.IndustrialMetal = PaletteEnabled * StencilEquals(StencilValue, IndustrialMetalStencilValue);
+	Masks.Concrete = PaletteEnabled * StencilEquals(StencilValue, ConcreteStencilValue);
+	Masks.VFX = PaletteEnabled * StencilEquals(StencilValue, VFXStencilValue);
+
+	const float CharacterPart = saturate(
+		Masks.Skin + Masks.Face + Masks.Hair + Masks.Cloth + Masks.MetalGear);
+	const float AnyExplicitStencilMask = saturate(
+		BaseCharacter + CharacterPart + Masks.Terrain + Masks.IndustrialMetal + Masks.Concrete + Masks.VFX);
+	const float DepthFallbackCharacter =
+		ComputeCustomDepthCharacterFallback(LinearDepth, UV) * (1.0f - AnyExplicitStencilMask);
+	Masks.Character = saturate(BaseCharacter + CharacterPart) * (1.0f - Masks.Sky);
+	Masks.Character = saturate(Masks.Character + DepthFallbackCharacter * (1.0f - Masks.Sky));
+	Masks.Environment = (1.0f - Masks.Sky) * (1.0f - Masks.Character);
+	return Masks;
+}
+
+// ===========================================================================
+// 림라이트 (스크린 스페이스 근사)
+// ===========================================================================
+// GBufferA.xyz 에 저장된 월드 노멀을 카메라 전방 벡터와 내적해
+// 표면이 카메라를 비스듬히 향하는 픽셀(= 외곽부)을 감지한다.
+// 물리 정확도보다 스타일라이징 효과를 우선한다.
+// ===========================================================================
+
+float SampleLinearDepth(float2 UV)
+{
+	return max(CalcSceneDepth(clamp(UV,
+		InputViewport_UVViewportBilinearMin,
+		InputViewport_UVViewportBilinearMax)), 1.0f);
+}
+
+float ComputeDepthRimMask(float2 UV, float Power)
+{
+	const float2 PixelStep = InputViewport_ExtentInverse;
+	const float CenterDepth = SampleLinearDepth(UV);
+	const float DepthL = SampleLinearDepth(UV - float2(PixelStep.x, 0.0f));
+	const float DepthR = SampleLinearDepth(UV + float2(PixelStep.x, 0.0f));
+	const float DepthU = SampleLinearDepth(UV - float2(0.0f, PixelStep.y));
+	const float DepthD = SampleLinearDepth(UV + float2(0.0f, PixelStep.y));
+
+	const float DepthDelta =
+		(abs(CenterDepth - DepthL)
+		+ abs(CenterDepth - DepthR)
+		+ abs(CenterDepth - DepthU)
+		+ abs(CenterDepth - DepthD)) * 0.25f;
+	const float RelativeDelta = DepthDelta / max(CenterDepth, 1.0f);
+	const float EdgeStart = max(ForwardDepthRimThreshold, 1e-5f);
+	const float EdgeEnd = max(ForwardDepthRimThreshold * 6.0f, EdgeStart + 2e-5f);
+	const float Edge = smoothstep(
+		EdgeStart,
+		EdgeEnd,
+		RelativeDelta);
+	return pow(Edge, max(Power * 0.5f, 0.1f));
+}
+
+float ComputeRimMask(float2 UV, float Power)
+{
+#if SHADING_PATH_DEFERRED
+	const float4 GBufferA_Sample = Texture2DSampleLevel(
+		SceneTexturesStruct.GBufferATexture,
+		SceneTexturesStruct_GBufferATextureSampler,
+		UV, 0);
+
+	// GBufferA.xyz : WorldNormal packed as N * 0.5 + 0.5
+	const float3 WorldNormal  = TSE_SafeNormalize(GBufferA_Sample.rgb * 2.0f - 1.0f, float3(0.0f, 0.0f, 1.0f));
+	const float3 CamForward   = TSE_SafeNormalize(ResolvedView.ViewForward.xyz, float3(0.0f, 0.0f, 1.0f));
+
+	// NdotCam: 1 = 표면이 카메라를 바라봄, 0 = 수직, <0 = 등짐
+	const float NdotCam = saturate(dot(WorldNormal, -CamForward));
+
+	// 표면이 카메라와 수직에 가까울수록 림이 강해짐
+	return pow(1.0f - NdotCam, max(Power, 0.1f));
+#else
+	// Mobile/Forward: GBuffer normal이 없으므로 depth discontinuity 기반 림으로 fallback.
+	return ComputeDepthRimMask(UV, Power);
+#endif
+}
+
+float3 SampleWorldNormalForStyle(float2 UV)
+{
+#if SHADING_PATH_DEFERRED
+	const float4 GBufferA_Sample = Texture2DSampleLevel(
+		SceneTexturesStruct.GBufferATexture,
+		SceneTexturesStruct_GBufferATextureSampler,
+		UV, 0);
+	return TSE_SafeNormalize(GBufferA_Sample.rgb * 2.0f - 1.0f, float3(0.0f, 0.0f, 1.0f));
+#else
+	return float3(0.0f, 0.0f, 1.0f);
+#endif
+}
+
+float ComputeLightBand(float3 WorldNormal, float Threshold, float Softness)
+{
+	const float NdotL = saturate(dot(WorldNormal, TSE_KeyLightDirection()));
+	const float HalfSoftness = max(Softness * 0.5f, max(fwidth(NdotL), 1e-4f));
+	return smoothstep(Threshold - HalfSoftness, Threshold + HalfSoftness, NdotL);
+}
+
+float3 ApplyCelShadowBand(
+	float3 Color,
+	float2 UV,
+	float Strength,
+	float Threshold,
+	float Softness,
+	float Depth,
+	float3 ShadowTint)
+{
+#if SHADING_PATH_DEFERRED
+	const float LitMask = ComputeLightBand(SampleWorldNormalForStyle(UV), Threshold, Softness);
+	const float ShadowAmount = (1.0f - LitMask) * saturate(Strength) * saturate(Depth);
+	return lerp(Color, Color * max(ShadowTint, 0.0f.xxx), ShadowAmount);
+#else
+	return Color;
+#endif
+}
+
+float ComputeDirectionalRimMask(float2 UV, float Power)
+{
+#if SHADING_PATH_DEFERRED
+	const float3 WorldNormal = SampleWorldNormalForStyle(UV);
+	const float BaseRim = ComputeRimMask(UV, Power);
+	const float Wrap = max(CharacterDirectionalRimLightWrap, 0.0f);
+	const float WrappedNdotL = saturate((dot(WorldNormal, TSE_KeyLightDirection()) + Wrap) / (1.0f + Wrap));
+	const float DirectionalFeather = max(fwidth(WrappedNdotL), 1e-4f);
+	const float LightSideMask = smoothstep(
+		CharacterDirectionalRimLightStart - DirectionalFeather,
+		max(CharacterDirectionalRimLightEnd + DirectionalFeather, CharacterDirectionalRimLightStart + 1e-4f),
+		WrappedNdotL);
+	return BaseRim * lerp(1.0f, LightSideMask, saturate(CharacterDirectionalRimStrength));
+#else
+	return ComputeRimMask(UV, Power);
+#endif
+}
+
+float CharacterRimAmount(float HairMask, float FaceMask, float MetalGearMask)
+{
+	float Amount = CharacterRimIntensity;
+#if !SHADING_PATH_DEFERRED
+	Amount = ForwardDepthRimIntensity;
+#endif
+	Amount *= lerp(1.0f, 0.55f, saturate(FaceMask));
+	Amount *= lerp(1.0f, 1.25f, saturate(HairMask));
+	Amount *= lerp(1.0f, 1.35f, saturate(MetalGearMask));
+	return Amount;
+}
+
+float EnvironmentRimAmount(float TerrainMask, float IndustrialMetalMask, float ConcreteMask, float VFXMask)
+{
+	float Amount = EnvRimIntensity;
+#if !SHADING_PATH_DEFERRED
+	Amount = ForwardDepthRimIntensity;
+#endif
+	Amount *= lerp(1.0f, 0.70f, saturate(TerrainMask));
+	Amount *= lerp(1.0f, 1.25f, saturate(IndustrialMetalMask));
+	Amount *= lerp(1.0f, 0.55f, saturate(ConcreteMask));
+	Amount *= lerp(1.0f, 0.20f, saturate(VFXMask));
+	return Amount;
+}
+
+float SampleStylePerceptualLuma(float2 UV)
+{
+	const float3 SampleColor = TSE_ToStyleColor(Texture2DSampleLevel(
+		InputSceneColorTexture,
+		InputSceneColorSampler,
+		clamp(UV, InputViewport_UVViewportBilinearMin, InputViewport_UVViewportBilinearMax),
+		0).rgb);
+	return TSE_PerceptualLuma(SampleColor);
+}
+
+float ComputeBackgroundMaterialClassScale(
+	float TerrainMask,
+	float IndustrialMetalMask,
+	float ConcreteMask,
+	float VFXMask)
+{
+	const float Terrain = saturate(TerrainMask);
+	const float IndustrialMetal = saturate(IndustrialMetalMask);
+	const float Concrete = saturate(ConcreteMask);
+	const float VFX = saturate(VFXMask);
+	const float ExplicitEnvMask = saturate(Terrain + IndustrialMetal + Concrete + VFX);
+	const float DefaultEnvironment = 1.0f - ExplicitEnvMask;
+
+	return
+		DefaultEnvironment * 0.75f
+		+ Terrain * 0.24f
+		+ IndustrialMetal * 1.35f
+		+ Concrete * 0.52f
+		+ VFX * 0.08f;
+}
+
+float ComputeBackgroundReflectiveSurfaceMask(
+	float2 UV,
+	float TerrainMask,
+	float IndustrialMetalMask,
+	float ConcreteMask,
+	float VFXMask)
+{
+#if SHADING_PATH_DEFERRED
+	const float4 GBufferB_Sample = Texture2DSampleLevel(
+		SceneTexturesStruct.GBufferBTexture,
+		SceneTexturesStruct_GBufferBTextureSampler,
+		UV, 0);
+
+	const float Metallic = saturate(GBufferB_Sample.r);
+	const float Roughness = saturate(GBufferB_Sample.b);
+	const float Smoothness = 1.0f - Roughness;
+	const float MetallicReflectance = saturate(Metallic * 1.15f);
+	const float SmoothnessFeather = max(fwidth(Smoothness), 1.0f / 255.0f);
+	const float SmoothReflectance = saturate(
+		smoothstep(0.18f - SmoothnessFeather, 0.88f + SmoothnessFeather, Smoothness) * 0.70f
+		+ Smoothness * 0.18f);
+#else
+	// Forward/Mobile에서는 roughness/metallic을 안정적으로 읽을 수 없으므로
+	// 밝기/edge 기반 결과가 완전히 죽지 않도록 sheen proxy를 조금 더 남긴다.
+	const float SmoothReflectance = 0.65f;
+	const float MetallicReflectance = 0.45f;
+#endif
+
+	const float Terrain = saturate(TerrainMask);
+	const float IndustrialMetal = saturate(IndustrialMetalMask);
+	const float Concrete = saturate(ConcreteMask);
+	const float VFX = saturate(VFXMask);
+	const float ExplicitEnvMask = saturate(Terrain + IndustrialMetal + Concrete + VFX);
+	const float DefaultEnvironment = 1.0f - ExplicitEnvMask;
+	const float MaterialScale =
+		ComputeBackgroundMaterialClassScale(Terrain, IndustrialMetal, Concrete, VFX);
+	const float SurfaceFloor =
+		DefaultEnvironment * 0.28f
+		+ Terrain * 0.12f
+		+ IndustrialMetal * 0.58f
+		+ Concrete * 0.24f
+		+ VFX * 0.06f;
+	const float GrazingMask = ComputeRimMask(UV, max(BackgroundWhiteRimPower * 0.65f, 1.0f));
+	const float GrazingSheen = saturate(lerp(0.20f, 0.95f, GrazingMask));
+	const float MaterialReflectance = max(MetallicReflectance, SmoothReflectance * GrazingSheen);
+
+	return saturate(max(MaterialReflectance * MaterialScale, GrazingMask * SurfaceFloor));
+}
+
+float ComputeBackgroundHighlightMask(float3 Color, float2 UV)
+{
+	const float CenterLuma = TSE_PerceptualLuma(Color);
+	const float LumaFeather = max(fwidth(CenterLuma) * 1.5f, 1.0f / 255.0f);
+	const float BrightMask = smoothstep(
+		BackgroundWhiteRimLumaStart - LumaFeather,
+		max(BackgroundWhiteRimLumaEnd + LumaFeather, BackgroundWhiteRimLumaStart + 1e-4f),
+		CenterLuma);
+
+	const float2 PixelStep = InputViewport_ExtentInverse;
+	const float NeighborLuma =
+		(SampleStylePerceptualLuma(UV + float2( PixelStep.x, 0.0f))
+		+ SampleStylePerceptualLuma(UV + float2(-PixelStep.x, 0.0f))
+		+ SampleStylePerceptualLuma(UV + float2(0.0f,  PixelStep.y))
+		+ SampleStylePerceptualLuma(UV + float2(0.0f, -PixelStep.y))) * 0.25f;
+
+	const float HighlightDelta = max(CenterLuma - NeighborLuma, 0.0f);
+	const float HighlightSignal = HighlightDelta * max(BackgroundWhiteRimHighlightContrast, 0.0f);
+	const float LocalHighlight = saturate(0.18f + smoothstep(0.01f, 0.16f + LumaFeather, HighlightSignal) * 0.82f);
+	return BrightMask * LocalHighlight;
+}
+
+float ComputeBackgroundWhiteRimMask(
+	float3 Color,
+	float2 UV,
+	float TerrainMask,
+	float IndustrialMetalMask,
+	float ConcreteMask,
+	float VFXMask)
+{
+	const float EdgeRim = ComputeRimMask(UV, BackgroundWhiteRimPower);
+	const float HighlightMask = ComputeBackgroundHighlightMask(Color, UV);
+	const float ReflectiveMask =
+		ComputeBackgroundReflectiveSurfaceMask(UV, TerrainMask, IndustrialMetalMask, ConcreteMask, VFXMask);
+	const float EdgeContribution = EdgeRim * HighlightMask * ReflectiveMask;
+	const float SurfaceContribution =
+		HighlightMask * ReflectiveMask * saturate(BackgroundWhiteRimSurfaceStrength);
+	return saturate(max(EdgeContribution, SurfaceContribution));
+}
+
+float ComputeCharacterMaskAt(float2 SampleUV, float2 SamplePixelPos)
+{
+	const float2 SafePixelPos = clamp(
+		SamplePixelPos,
+		float2(0.0f, 0.0f),
+		ResolvedView.BufferSizeAndInvSize.xy - float2(1.0f, 1.0f));
+	const float LinearDepth = SampleLinearDepth(SampleUV);
+	const FTrueSyncEndfieldZoneMasks Masks =
+		ComputeZoneMasks(LinearDepth, SampleUV, uint2(SafePixelPos));
+	return Masks.Character;
+}
+
+float ComputeCharacterOutlineMask(float2 UV, float2 PixelPos, float CharacterMask)
+{
+	if (CharacterOutlineIntensity <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const float OutsideCharacter = 1.0f - saturate(CharacterMask);
+	if (OutsideCharacter <= 0.0f)
+	{
+		return 0.0f;
+	}
+
+	const float Width = max(CharacterOutlineWidth, 0.5f);
+	const float2 UvStep = InputViewport_ExtentInverse * Width;
+	const float2 PixelStep = float2(Width, Width);
+
+	float CardinalMask = 0.0f;
+	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x, 0.0f), PixelPos + float2( PixelStep.x, 0.0f)));
+	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x, 0.0f), PixelPos + float2(-PixelStep.x, 0.0f)));
+	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(0.0f,  UvStep.y), PixelPos + float2(0.0f,  PixelStep.y)));
+	CardinalMask = max(CardinalMask, ComputeCharacterMaskAt(UV + float2(0.0f, -UvStep.y), PixelPos + float2(0.0f, -PixelStep.y)));
+
+	float DiagonalMask = 0.0f;
+	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x,  UvStep.y), PixelPos + float2( PixelStep.x,  PixelStep.y)));
+	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x,  UvStep.y), PixelPos + float2(-PixelStep.x,  PixelStep.y)));
+	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2( UvStep.x, -UvStep.y), PixelPos + float2( PixelStep.x, -PixelStep.y)));
+	DiagonalMask = max(DiagonalMask, ComputeCharacterMaskAt(UV + float2(-UvStep.x, -UvStep.y), PixelPos + float2(-PixelStep.x, -PixelStep.y)));
+
+	return saturate(max(CardinalMask, DiagonalMask * 0.55f)) * OutsideCharacter;
+}
+
+// ===========================================================================
+// Zone B — 캐릭터 처리
+// ===========================================================================
+
+float3 ProcessCharacter(
+	float3 Color,
+	float2 UV,
+	float SkinMask,
+	float FaceMask,
+	float HairMask,
+	float ClothMask,
+	float MetalGearMask)
+{
+	float3 Result = Color;
+
+	// 1. 콘트라스트 부스트 (툰 팝감)
+	const float SoftPartMask = saturate(SkinMask + FaceMask);
+	const float FabricMask = saturate(ClothMask);
+	const float GearMask = saturate(MetalGearMask);
+	const float EffectiveContrast = CharacterContrastBoost
+		* lerp(1.0f, 0.985f, SoftPartMask)
+		* lerp(1.0f, 1.005f, FabricMask)
+		* lerp(1.0f, 1.025f, GearMask);
+	Result = TSE_ContrastMidGray(Result, max(EffectiveContrast, 0.0f));
+	Result = max(Result, 0.0f);
+
+	// 2. 채도 부스트 (캐릭터 색상 보존 + 배경 대비 강화)
+	const float Luma2 = TSE_Luma(Result);
+	const float EffectiveSaturation = CharacterSaturationBoost
+		* lerp(1.0f, 0.985f, SoftPartMask)
+		* lerp(1.0f, 1.01f, FabricMask)
+		* lerp(1.0f, 0.96f, GearMask);
+	Result = lerp(Luma2.xxx, Result, max(EffectiveSaturation, 0.0f));
+
+	const float CharacterCelPartScale =
+		lerp(1.0f, 0.70f, SoftPartMask)
+		* lerp(1.0f, 1.08f, FabricMask)
+		* lerp(1.0f, 1.16f, GearMask);
+	Result = ApplyCelShadowBand(
+		Result,
+		UV,
+		CharacterCelShadingStrength * CharacterCelPartScale,
+		CharacterCelShadowThreshold,
+		CharacterCelShadowSoftness,
+		CharacterCelShadowDepth,
+		CharacterCelShadowTint);
+
+	// 3. 림라이트: 캐릭터 외곽에 은은한 쿨톤 글로우
+	const float RimMask = ComputeDirectionalRimMask(UV, CharacterRimPower);
+	Result += RimMask
+		* CharacterRimAmount(HairMask, FaceMask, MetalGearMask)
+		* CharacterRimColor;
+
+	const float WhiteRimMask = ComputeDirectionalRimMask(UV, CharacterWhiteRimPower);
+	const float WhiteRimPartScale =
+		lerp(1.0f, 0.72f, saturate(FaceMask))
+		* lerp(1.0f, 1.22f, saturate(HairMask))
+		* lerp(1.0f, 1.12f, saturate(MetalGearMask));
+	Result += WhiteRimMask
+		* max(CharacterWhiteRimIntensity, 0.0f)
+		* WhiteRimPartScale
+		* CharacterWhiteRimColor;
+
+	return Result;
+}
+
+// ===========================================================================
+// Zone C — 환경/배경 처리
+// ===========================================================================
+
+float3 ProcessEnvironment(
+	float3 Color,
+	float2 UV,
+	float LinearDepth,
+	float TerrainMask,
+	float IndustrialMetalMask,
+	float ConcreteMask,
+	float VFXMask)
+{
+	const float EffectiveInteriorBlend = saturate(InteriorBlend);
+	const float Terrain = saturate(TerrainMask);
+	const float IndustrialMetal = saturate(IndustrialMetalMask);
+	const float Concrete = saturate(ConcreteMask);
+	const float VFX = saturate(VFXMask);
+	const float BackgroundWhiteRimDistanceFade = TSE_DistanceFadeOut(
+		LinearDepth,
+		BackgroundWhiteRimFadeStartDistance,
+		BackgroundWhiteRimFadeEndDistance);
+	const float BackgroundWhiteRimMask =
+		ComputeBackgroundWhiteRimMask(Color, UV, Terrain, IndustrialMetal, Concrete, VFX)
+		* BackgroundWhiteRimDistanceFade;
+	float3 Result = Color;
+
+	// 1. 미세 채도 감소 (환경이 캐릭터보다 더 중성적으로 보이게)
+	const float EffectiveDesaturation = EnvDesaturation
+		* lerp(1.0f, InteriorDesaturationMultiplier, EffectiveInteriorBlend)
+		* lerp(1.0f, 0.80f, Terrain)
+		* lerp(1.0f, 1.12f, Concrete)
+		* lerp(1.0f, 0.35f, VFX);
+	Result = TSE_Desaturate(Result, EffectiveDesaturation);
+
+	// 2. 쿨톤 색 이동 (엔드필드 특유의 차갑고 절제된 환경 분위기)
+	const float EffectiveCoolShift = EnvCoolShift
+		* lerp(1.0f, InteriorCoolShiftMultiplier, EffectiveInteriorBlend)
+		* lerp(1.0f, 1.08f, IndustrialMetal)
+		* lerp(1.0f, 1.12f, Concrete)
+		* lerp(1.0f, 0.25f, VFX);
+	Result.r *= (1.0f - 0.08f * EffectiveCoolShift);
+	Result.g *= (1.0f + 0.02f * EffectiveCoolShift);
+	Result.b *= (1.0f + 0.10f * EffectiveCoolShift);
+
+	const float EnvCelMaterialScale =
+		lerp(1.0f, 0.88f, Terrain)
+		* lerp(1.0f, 1.12f, IndustrialMetal)
+		* lerp(1.0f, 1.05f, Concrete)
+		* lerp(1.0f, 0.18f, VFX);
+	Result = ApplyCelShadowBand(
+		Result,
+		UV,
+		EnvCelShadingStrength * EnvCelMaterialScale * TSE_DistanceFadeOut(
+			LinearDepth,
+			EnvCelFadeStartDistance,
+			EnvCelFadeEndDistance),
+		EnvCelShadowThreshold,
+		EnvCelShadowSoftness,
+		EnvCelShadowDepth,
+		EnvCelShadowTint);
+
+	// 3. 그림자 밀도 보존.
+	// Endfield 계열의 산업 실내는 어두운 면이 중성 회색으로 떠 있으면 바로 가벼워진다.
+	// 화면공간 보정만으로 실제 AO를 대체할 수는 없지만, haze/간접광으로 뜬 저휘도 영역을
+	// 차갑고 낮은 값으로 눌러 Endfield식 shadow density를 회복한다.
+	const float ShadowMask = TSE_ShadowMask(Result, EnvShadowLumaStart, EnvShadowLumaEnd);
+	const float ShadowDensityScale =
+		lerp(1.0f, 1.10f, Terrain)
+		* lerp(1.0f, 0.92f, IndustrialMetal)
+		* lerp(1.0f, 1.22f, Concrete)
+		* lerp(1.0f, 0.25f, VFX);
+	Result = ApplyEnvironmentShadowDensity(Result, ShadowMask, ShadowDensityScale);
+
+	// 4. 림라이트: 환경 물체 외곽에 대기감 강화
+	const float RimMask = ComputeRimMask(UV, EnvRimPower);
+	Result += RimMask
+		* EnvironmentRimAmount(Terrain, IndustrialMetal, Concrete, VFX)
+		* EnvRimColor;
+
+	const float BackgroundHighlightMask =
+		ComputeBackgroundHighlightMask(Color, UV);
+	const float BackgroundReflectiveMask =
+		ComputeBackgroundReflectiveSurfaceMask(UV, Terrain, IndustrialMetal, Concrete, VFX);
+	// Background white rim is HDR additive, so keep the boost explicit and tunable.
+	// Squaring the mask makes weak temporal noise fade out before intensity is applied.
+	const float StableBackgroundWhiteRimMask = BackgroundWhiteRimMask * BackgroundWhiteRimMask;
+	const float3 BackgroundWhiteRimAdd =
+		StableBackgroundWhiteRimMask
+		* max(BackgroundWhiteRimIntensity, 0.0f)
+		* clamp(BackgroundWhiteRimIntensityScale, 0.0f, 10.0f)
+		* BackgroundWhiteRimColor;
+
+	if (DebugBackgroundWhiteRim > 0.5f)
+	{
+		const float3 DebugMaskColor = float3(1.0f, 0.86f, 0.24f) * saturate(BackgroundWhiteRimMask * 4.0f);
+		const float3 DebugSignalColor = float3(
+			saturate(BackgroundReflectiveMask),
+			saturate(BackgroundHighlightMask),
+			saturate(BackgroundWhiteRimMask));
+		return lerp(DebugSignalColor, DebugMaskColor, 0.7f);
+	}
+
+	// 5. 거리 Haze (스카이로의 전환 구간에서는 이미 SkyMask로 가려지므로 여기서 처리)
+	const float HazeT = saturate(
+		(LinearDepth - HazeStartDistance) /
+		max(HazeEndDistance - HazeStartDistance, 1.0f));
+	const float EffectiveHazeAmount = HazeT
+		* saturate(HazeIntensity)
+		* lerp(1.0f, InteriorHazeMultiplier, EffectiveInteriorBlend)
+		* lerp(1.0f, 1.12f, Terrain)
+		* lerp(1.0f, 0.82f, IndustrialMetal)
+		* lerp(1.0f, 0.88f, Concrete)
+		* lerp(1.0f, 0.18f, VFX)
+		* lerp(1.0f, 1.0f - saturate(EnvShadowHazeSuppression), ShadowMask);
+
+	const float3 TintedHaze = TSE_PerceptualHaze(Result, HazeTint, HazeTintStrength);
+	Result = lerp(Result, TintedHaze, EffectiveHazeAmount);
+	Result += BackgroundWhiteRimAdd * (1.0f - EffectiveHazeAmount * 0.50f);
+
+	// 6. Interior 콘트라스트 미세 보정
+	if (EffectiveInteriorBlend > 0.01f)
+	{
+		Result = lerp(
+			Result,
+			TSE_ContrastMidGray(Result, max(InteriorContrast, 0.0f)),
+			EffectiveInteriorBlend);
+	}
+
+	return Result;
+}
+
+// ===========================================================================
+// MainPS
+// ===========================================================================
+
+void MainPS(
+	noperspective float4 UVAndScreenPos : TEXCOORD0,
+	in FStereoPSInput StereoInput,
+	out float4 OutColor : SV_Target0)
+{
+	ResolvedView = ResolveView();
+
+	const float2 UV      = GetSceneUV(UVAndScreenPos);
+	const float2 PixelPos = UVAndScreenPos.zw;
+
+	// 원본 Color 샘플
+	const float4 SceneSample = Texture2DSampleLevel(
+		InputSceneColorTexture, InputSceneColorSampler, UV, 0);
+	const float3 SceneColor = SceneSample.rgb;
+	const float3 StyleSceneColor = TSE_ToStyleColor(SceneColor);
+
+	// 선형 깊이
+	const float LinearDepth = max(CalcSceneDepth(UV), 1.0f);
+
+	// ---------------------------------------------------------------------------
+	// 픽셀 존 분류
+	// ---------------------------------------------------------------------------
+	const FTrueSyncEndfieldZoneMasks ZoneMasks =
+		ComputeZoneMasks(LinearDepth, UV, uint2(PixelPos));
+
+	// ---------------------------------------------------------------------------
+	// 각 존 처리
+	// ---------------------------------------------------------------------------
+	const float3 CharColor = ProcessCharacter(
+		StyleSceneColor,
+		UV,
+		ZoneMasks.Skin,
+		ZoneMasks.Face,
+		ZoneMasks.Hair,
+		ZoneMasks.Cloth,
+		ZoneMasks.MetalGear);
+	const float3 EnvColor = ProcessEnvironment(
+		StyleSceneColor,
+		UV,
+		LinearDepth,
+		ZoneMasks.Terrain,
+		ZoneMasks.IndustrialMetal,
+		ZoneMasks.Concrete,
+		ZoneMasks.VFX);
+	// Zone A (Sky) = SceneColor 그대로
+
+	// ---------------------------------------------------------------------------
+	// 존 합성
+	// Sky mask가 높아질수록 CharColor/EnvColor가 점점 희석되어 원본이 됨.
+	// ---------------------------------------------------------------------------
+	float3 Result = StyleSceneColor;                        // Sky: 원본
+	Result = lerp(Result, EnvColor,  ZoneMasks.Environment); // 환경 오버라이드
+	Result = lerp(Result, CharColor, ZoneMasks.Character);   // 캐릭터 오버라이드
+
+	const float CharacterOutlineMask =
+		ComputeCharacterOutlineMask(UV, PixelPos, ZoneMasks.Character);
+	Result = lerp(
+		Result,
+		CharacterOutlineColor,
+		CharacterOutlineMask * saturate(CharacterOutlineIntensity));
+
+	// ---------------------------------------------------------------------------
+	// 디버그 존 시각화
+	//   Sky  = 파랑  Character = 빨강  Environment = 초록
+	// ---------------------------------------------------------------------------
+	if (DebugZoneMask > 0.5f && DebugBackgroundWhiteRim <= 0.5f)
+	{
+		const float3 SkyDbg  = float3(0.10f, 0.20f, 0.90f);
+		const float3 CharDbg = float3(0.90f, 0.10f, 0.10f);
+		const float3 EnvDbg  = float3(0.10f, 0.80f, 0.20f);
+
+		const float EnvDebugMask = saturate(ZoneMasks.Environment - ZoneMasks.VFX);
+		float3 DbgColor = lerp(EnvDbg, CharDbg, ZoneMasks.Character);
+		DbgColor = lerp(DbgColor, float3(0.75f, 0.20f, 0.95f), ZoneMasks.VFX);
+		DbgColor = lerp(DbgColor, SkyDbg, ZoneMasks.Sky);
+		DbgColor = lerp(DbgColor, EnvDbg, EnvDebugMask * (1.0f - ZoneMasks.Character));
+		Result = lerp(Result, DbgColor, 0.80f);
+	}
+
+	// AfterDOF 단계 SceneColor는 HDR이므로 음수만 막고 상한은 유지.
+	OutColor = float4(max(TSE_ToSceneColor(Result), 0.0f), SceneSample.a);
+}
