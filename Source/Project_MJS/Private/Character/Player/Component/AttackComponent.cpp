@@ -7,7 +7,9 @@
 #include "Character/Player/Data/ComboAttackDataAsset.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
 
 UAttackComponent::UAttackComponent()

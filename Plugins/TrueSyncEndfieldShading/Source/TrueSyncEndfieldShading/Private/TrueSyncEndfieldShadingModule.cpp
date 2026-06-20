@@ -28,7 +28,8 @@ void FTrueSyncEndfieldShadingModule::StartupModule()
 	}
 	else
 	{
-		PostEngineInitHandle = FCoreDelegates::OnPostEngineInit.AddRaw(this, &FTrueSyncEndfieldShadingModule::HandlePostEngineInit);
+		PostEngineInitHandle = FCoreDelegates::GetOnPostEngineInit().AddRaw(
+			this, &FTrueSyncEndfieldShadingModule::HandlePostEngineInit);
 	}
 }
 
@@ -36,7 +37,7 @@ void FTrueSyncEndfieldShadingModule::ShutdownModule()
 {
 	if (PostEngineInitHandle.IsValid())
 	{
-		FCoreDelegates::OnPostEngineInit.Remove(PostEngineInitHandle);
+		FCoreDelegates::GetOnPostEngineInit().Remove(PostEngineInitHandle);
 		PostEngineInitHandle.Reset();
 	}
 

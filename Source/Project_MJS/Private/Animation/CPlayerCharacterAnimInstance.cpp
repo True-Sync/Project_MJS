@@ -5,6 +5,7 @@
 
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PawnMovementComponent.h"
+#include "KismetAnimationLibrary.h"
 
 void UCPlayerCharacterAnimInstance::NativeInitializeAnimation()
 {
@@ -32,7 +33,8 @@ void UCPlayerCharacterAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	
 	const FVector Velocity = MovementComp->Velocity;
 	GroundSpeed = FVector(Velocity.X, Velocity.Y, 0.f).Size();
-	MovementDirection = CalculateDirection(Velocity, OwningPlayerCharacter->GetActorRotation());
+	MovementDirection = UKismetAnimationLibrary::CalculateDirection(
+		Velocity, OwningPlayerCharacter->GetActorRotation());
 	OwnerVelocity = Velocity;
 	bIsInAir = MovementComp->IsFalling();
 	bShouldMove = MovementComp->IsMovementInProgress();

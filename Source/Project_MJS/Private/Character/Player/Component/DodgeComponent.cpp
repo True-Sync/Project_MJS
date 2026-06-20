@@ -2,6 +2,7 @@
 
 #include "Animation/AnimInstance.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 
 UDodgeComponent::UDodgeComponent()
