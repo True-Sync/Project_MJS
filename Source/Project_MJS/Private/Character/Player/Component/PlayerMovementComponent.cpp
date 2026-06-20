@@ -4,6 +4,7 @@
 #include "Character/Player/Component/PlayerMovementComponent.h"
 
 #include "TimerManager.h"
+#include "Engine/World.h"
 
 
 bool UPlayerMovementComponent::CanDodge() const

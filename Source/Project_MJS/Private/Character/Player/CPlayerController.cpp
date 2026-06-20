@@ -12,6 +12,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "EngineUtils.h"
 #include "InputActionValue.h"
+#include "Engine/LocalPlayer.h"
 
 void ACPlayerController::BeginPlay()
 {
