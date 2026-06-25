@@ -53,6 +53,19 @@ AActor* ACameraRigActor::GetCurrentTarget() const
 	return CameraMoveComp ? CameraMoveComp->GetCurrentTarget() : nullptr;
 }
 
+void ACameraRigActor::SetFocusTarget(AActor* NewFocusTarget)
+{
+	if (CameraMoveComp)
+	{
+		CameraMoveComp->SetFocusTarget(NewFocusTarget);
+	}
+}
+
+AActor* ACameraRigActor::GetFocusTarget() const
+{
+	return CameraMoveComp ? CameraMoveComp->GetFocusTarget() : nullptr;
+}
+
 void ACameraRigActor::AddLookInput(const FVector2D& LookInput)
 {
 	if (CameraMoveComp)

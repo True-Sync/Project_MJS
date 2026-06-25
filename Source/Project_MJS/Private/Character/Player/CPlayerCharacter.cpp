@@ -4,6 +4,7 @@
 #include "Character/Player/Component/AttackComponent.h"
 #include "Character/Player/Component/DodgeComponent.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
+#include "Character/Player/Component/TargetingComponent.h"
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicParticipantComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -16,6 +17,7 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 	PlayerMovementComponent = Cast<UPlayerMovementComponent>(GetCharacterMovement());
 	DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
 	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	TargetingComponent = CreateDefaultSubobject<UTargetingComponent>(TEXT("TargetingComponent"));
 	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
 	

@@ -20,6 +20,8 @@ public:
 	void Initialize(USpringArmComponent* InSpringArm);
 	void SetCameraTarget(AActor* NewTarget);
 	AActor* GetCurrentTarget() const { return TargetActor.Get(); }
+	void SetFocusTarget(AActor* NewFocusTarget);
+	AActor* GetFocusTarget() const { return FocusTargetActor.Get(); }
 
 	void AddLookInput(const FVector2D& LookInput);
 	void AdjustZoom(float Delta);
@@ -30,13 +32,19 @@ public:
 	FRotator GetCameraYawRotation() const;
 
 private:
+	void UpdateRotationToFocusTarget();
+	FVector GetFocusWorldLocation() const;
+
 	UPROPERTY(VisibleAnywhere, Category = "Camera|Follow")
 	TWeakObjectPtr<AActor> TargetActor;
+
+	UPROPERTY(VisibleAnywhere, Category = "Camera|Focus")
+	TWeakObjectPtr<AActor> FocusTargetActor;
 
 	UPROPERTY(VisibleAnywhere, Category = "Camera")
 	TWeakObjectPtr<USpringArmComponent> SpringArm;
 
-	// ===== 추적 관련 =====
+	// ===== 추적 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Follow")
 	FVector TargetOffset = FVector(0.0f, 0.0f, 85.0f);
 
@@ -46,7 +54,7 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera|Follow", meta = (ClampMin = "1.0"))
 	float RotationInterpSpeed = 20.0f;
 
-	// ===== 회전 관련 =====
+	// ===== 회전 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Rotation", meta = (ClampMin = "0.01"))
 	float YawSensitivity = 1.0f;
 
@@ -59,7 +67,10 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Camera|Rotation", meta = (ClampMin = "-89.0", ClampMax = "89.0"))
 	float MaxPitch = 35.0f;
 
-	// ===== 줌 관련 =====
+	UPROPERTY(EditAnywhere, Category = "Camera|Focus")
+	bool bIgnoreLookInputWhileFocused = true;
+
+	// ===== 줌 =====
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom", meta = (ClampMin = "1.0"))
 	float ArmLengthInterpSpeed = 8.0f;
 

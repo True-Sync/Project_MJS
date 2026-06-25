@@ -21,7 +21,8 @@ public class Project_MJS : ModuleRules
 			"MovieSceneTracks",
 			"CinematicCamera",
 			"Niagara",
-			"AIModule"
+			"AIModule",
+			"UMG"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime" });
