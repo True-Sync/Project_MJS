@@ -12,6 +12,7 @@ class UAttackComponent;
 class UCinematicActionComponent;
 class UCinematicParticipantComponent;
 class UDodgeComponent;
+class UTargetingComponent;
 
 UCLASS()
 class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicParticipant
@@ -34,6 +35,7 @@ public:
 	bool GetLastMoveWorldDirection(FVector& OutDirection) const;
 	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
+	UTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
 	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
 
@@ -52,6 +54,9 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Attack", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAttackComponent> AttackComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Targeting", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTargetingComponent> TargetingComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicActionComponent> CinematicActionComponent;

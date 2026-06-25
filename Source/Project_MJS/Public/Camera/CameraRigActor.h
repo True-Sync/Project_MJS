@@ -34,6 +34,8 @@ public:
 	
 	void SetCameraTarget(AActor* NewTarget);
 	AActor* GetCurrentTarget() const;
+	void SetFocusTarget(AActor* NewFocusTarget);
+	AActor* GetFocusTarget() const;
 
 	void AddLookInput(const FVector2D& LookInput);
 	void AdjustZoom(float Delta);
