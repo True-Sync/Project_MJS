@@ -6,6 +6,7 @@
 #include "CPlayerController.generated.h"
 
 class ACameraRigActor;
+class ACPlayerCharacter;
 class UInputAction;
 class UInputMappingContext;
 class UTargetingComponent;
@@ -25,12 +26,15 @@ protected:
 public:
 	FRotator GetCameraYawRotation() const;
 	ACameraRigActor* GetCameraRig() const { return CameraRig; }
+	ACameraRigActor* EnsureCameraRig();
 
 	UFUNCTION(BlueprintPure, Category = "Cinematic|Input")
 	bool IsCinematicGameplayInputLocked() const;
 
 private:
 	void InitializeCameraRig();
+	ACameraRigActor* SpawnCameraRig();
+	void ApplyCameraRigToCurrentPawn();
 	void BindToTargetingComponent();
 	void UnbindFromTargetingComponent();
 
@@ -49,6 +53,7 @@ private:
 	void HandleTargetingDisplayCleared();
 	void HandleHardTargetChanged(AActor* NewHardTarget);
 
+	ACPlayerCharacter* GetPlayerCharacter() const;
 	UTargetingComponent* GetPlayerTargetingComponent() const;
 	bool IsCinematicMoveInputLocked() const;
 	bool IsCinematicLookInputLocked() const;

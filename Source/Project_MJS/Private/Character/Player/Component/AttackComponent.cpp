@@ -255,9 +255,10 @@ void UAttackComponent::CheckWeaponTrace()
 		if (bHit && HitResult.GetActor())
 		{
 			AActor* HitActor = HitResult.GetActor();
-			if (!HitActors.Contains(HitActor))
+			const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+			if (!HitActors.Contains(HitActorPtr))
 			{
-				HitActors.Add(HitActor); 
+				HitActors.Add(HitActorPtr); 
 				
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
 				AController* InstigatorController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
@@ -332,9 +333,10 @@ void UAttackComponent::CheckKickTrace()
 	if (bHit && HitResult.GetActor())
 	{
 		AActor* HitActor = HitResult.GetActor();
-		if (!HitActors.Contains(HitActor))
+		const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+		if (!HitActors.Contains(HitActorPtr))
 		{
-			HitActors.Add(HitActor);
+			HitActors.Add(HitActorPtr);
 			
 			AController* InstigatorController = OwnerCharacter->GetController();
 			

@@ -38,12 +38,6 @@ void ACPlayerCharacter::BeginPlay()
 	
 }
 
-void ACPlayerCharacter::Tick(float DeltaTime)
-{
-	Super::Tick(DeltaTime);
-
-}
-
 void ACPlayerCharacter::Move(const FVector2D& MoveInput)
 {
 	if (MoveInput.IsNearlyZero())

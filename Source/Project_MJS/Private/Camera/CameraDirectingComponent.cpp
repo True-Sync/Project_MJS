@@ -2,11 +2,13 @@
 
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Engine/World.h"
 #include "GameFramework/PlayerController.h"
 
 UCameraDirectingComponent::UCameraDirectingComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 }
 
 
@@ -29,12 +31,14 @@ void UCameraDirectingComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 
 	if (FOVPhase == EFOVPhase::None)
 	{
+		SetComponentTickEnabled(false);
 		return;
 	}
 
 	if (!CameraComp.IsValid())
 	{
 		FOVPhase = EFOVPhase::None;
+		SetComponentTickEnabled(false);
 		return;
 	}
 
@@ -50,6 +54,7 @@ void UCameraDirectingComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 			else
 			{
 				FOVPhase = EFOVPhase::None;
+				SetComponentTickEnabled(false);
 			}
 		}
 
@@ -74,11 +79,13 @@ void UCameraDirectingComponent::TickComponent(float DeltaTime, ELevelTick TickTy
 		else
 		{
 			FOVPhase = EFOVPhase::None;
+			SetComponentTickEnabled(false);
 		}
 	}
 	else if (FOVPhase == EFOVPhase::BlendOut)
 	{
 		FOVPhase = EFOVPhase::None;
+		SetComponentTickEnabled(false);
 	}
 }
 
@@ -143,6 +150,7 @@ void UCameraDirectingComponent::SetFOVImmediately(float NewFOV)
 	if (UCameraComponent* Camera = CameraComp.Get())
 	{
 		FOVPhase = EFOVPhase::None;
+		SetComponentTickEnabled(false);
 		Camera->SetFieldOfView(NewFOV);
 	}
 }
@@ -166,6 +174,7 @@ void UCameraDirectingComponent::SetFOVPhase(EFOVPhase NewPhase, float Duration, 
 	FOVPhaseDuration = Duration;
 	FOVStart = NewStartFOV;
 	FOVTarget = NewTargetFOV;
+	SetComponentTickEnabled(NewPhase != EFOVPhase::None);
 
 	if (Duration <= 0.0f && NewPhase != EFOVPhase::Hold)
 	{
