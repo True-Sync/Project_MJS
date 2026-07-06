@@ -2,23 +2,34 @@
 #include "Character/Enemy/EnemyFSMComponent.h"
 #include "Character/Enemy/EnemyActionDataAsset.h"
 #include "AIController.h"
+#include "DrawDebugHelpers.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Character/Player/Component/AttackComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/DamageEvents.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	TargetPointComponent = CreateDefaultSubobject<USceneComponent>(TEXT("TargetPoint"));
 	TargetPointComponent->SetupAttachment(RootComponent);
 	TargetPointComponent->SetRelativeLocation(FVector(0.0f, 0.0f, TargetPointHeight));
 
 	FSMComponent = CreateDefaultSubobject<UEnemyFSMComponent>(TEXT("FSMComponent"));
+	
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->bUseRVOAvoidance = true;
+		GetCharacterMovement()->AvoidanceConsiderationRadius = 150.0f; // 서로 밀어내는 반경
+		GetCharacterMovement()->AvoidanceWeight = 0.5f; // 회피 가중치
+	}
 }
 
 void AEnemyCharacter::OnConstruction(const FTransform& Transform)
@@ -34,15 +45,28 @@ void AEnemyCharacter::OnConstruction(const FTransform& Transform)
 void AEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-
-	// 데이터 에셋이 연결되어 있다면 강인도를 초기화
+	
 	if (EnemyDataAsset)
 	{
 		CurrentPoise = EnemyDataAsset->MaxPoise;
+		if (GetCharacterMovement())
+		{
+			GetCharacterMovement()->MaxWalkSpeed = EnemyDataAsset->PatrolSpeed;
+		}
 	}
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("EnemyDataAsset is missing on %s!"), *GetName());
+	}
+}
+
+void AEnemyCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (bIsWeaponTracing)
+	{
+		WeaponTraceTick();
 	}
 }
 
@@ -183,4 +207,66 @@ void AEnemyCharacter::RecoverPoise()
 void AEnemyCharacter::ClearHitFlash()
 {
 	if (GetMesh()) GetMesh()->SetOverlayMaterial(nullptr);
+}
+
+void AEnemyCharacter::StartWeaponTrace()
+{
+	bIsWeaponTracing = true;
+	SetActorTickEnabled(true);
+	HitActors.Empty(); 
+}
+
+void AEnemyCharacter::StopWeaponTrace()
+{
+	bIsWeaponTracing = false;
+	SetActorTickEnabled(false);
+	HitActors.Empty(); 
+}
+
+// ===== 공격 판정 관련 함수 구현부 =====
+void AEnemyCharacter::WeaponTraceTick()
+{
+	if (!GetMesh()) return;
+
+	FVector StartLoc = GetMesh()->GetSocketLocation(FName("WeaponBase"));
+	FVector EndLoc = GetMesh()->GetSocketLocation(FName("WeaponTip"));
+
+	TArray<FHitResult> HitResults;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this); 
+
+	bool bHit = GetWorld()->SweepMultiByChannel(
+		HitResults,
+		StartLoc,
+		EndLoc,
+		FQuat::Identity,
+		ECC_Pawn, 
+		FCollisionShape::MakeSphere(WeaponTraceRadius),
+		QueryParams
+	);
+	
+	DrawDebugCapsule(GetWorld(), 
+		(StartLoc + EndLoc) * 0.5f, 
+		FVector::Dist(StartLoc, EndLoc) * 0.5f, WeaponTraceRadius, 
+		(EndLoc - StartLoc).Rotation().Quaternion(), 
+		bHit ? FColor::Red : FColor::Green, 
+		false,
+		0.5f);
+	
+	if (bHit)
+	{
+		for (const FHitResult& Hit : HitResults)
+		{
+			AActor* HitActor = Hit.GetActor();
+			
+			if (HitActor && !HitActors.Contains(HitActor))
+			{
+				HitActors.Add(HitActor); 
+
+				// 데미지 적용
+				float DamageAmount = 20.0f; 
+				UGameplayStatics::ApplyDamage(HitActor, DamageAmount, GetController(), this, UDamageType::StaticClass());
+			}
+		}
+	}
 }

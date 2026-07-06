@@ -9,6 +9,7 @@ enum class EEnemyState : uint8
 {
 	Idle,
 	Approach,
+	Circling,
 	Attack_Telegraph,
 	Attack_Execution,
 	Attack_Recovery,
@@ -26,6 +27,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 public:	
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
@@ -52,4 +54,9 @@ private:
 	void UpdateApproach();
 	void UpdateReturn();
 	bool CheckLeashDistance();
+	void UpdateCircling();
+	void ReleaseTokenIfHasOne();
+	
+	float TokenCooldownTime = 0.0f;
+	float ApproachTime = 0.0f;
 };

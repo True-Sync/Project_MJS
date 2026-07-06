@@ -16,8 +16,7 @@
 UAttackComponent::UAttackComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// 평소에는 연산하지 않도록 꺼둡니다.
-	//PrimaryComponentTick.bStartWithTickEnabled = false; 
+	PrimaryComponentTick.bStartWithTickEnabled = false; 
 }
 
 void UAttackComponent::BeginPlay()
@@ -207,7 +206,7 @@ void UAttackComponent::StartWeaponAttack(float KnockbackForce)
 	}
 
 	bIsWeaponAttacking = true;
-	//SetComponentTickEnabled(true);
+	SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndWeaponAttack()
@@ -218,10 +217,10 @@ void UAttackComponent::EndWeaponAttack()
 	}
 	
 	bIsWeaponAttacking = false;
-	//if (!bIsKickAttacking) 
-	//{
-	//	SetComponentTickEnabled(false); 
-	//}
+	if (!bIsKickAttacking) 
+	{
+		SetComponentTickEnabled(false); 
+	}
 }
 
 void UAttackComponent::CheckWeaponTrace()
@@ -286,7 +285,7 @@ void UAttackComponent::StartKickAttack(FName SocketName, float KnockbackForce)
 	CurrentKnockbackForce = KnockbackForce;
 	
 	bIsKickAttacking = true;
-	//SetComponentTickEnabled(true);
+	SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndKickAttack()
@@ -297,10 +296,10 @@ void UAttackComponent::EndKickAttack()
 	}
 	
 	bIsKickAttacking = false;
-	//if (!bIsWeaponAttacking)
-	//{
-	//	SetComponentTickEnabled(false);
-	//}
+	if (!bIsWeaponAttacking)
+	{
+		SetComponentTickEnabled(false);
+	}
 }
 
 void UAttackComponent::CheckKickTrace()
@@ -319,8 +318,8 @@ void UAttackComponent::CheckKickTrace()
 	
 	bool bHit = GetWorld()->SweepSingleByChannel(
 		HitResult, 
-		KickLocation, // Start
-		KickLocation, // End
+		KickLocation,
+		KickLocation,
 		FQuat::Identity,
 		ECC_GameTraceChannel1, 
 		FCollisionShape::MakeSphere(KickRadius), 

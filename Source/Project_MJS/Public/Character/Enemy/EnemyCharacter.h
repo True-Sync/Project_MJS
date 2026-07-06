@@ -26,7 +26,12 @@ public:
 	// ===== 데이터 에셋 반환 (FSM 등 외부에서 접근 용이하도록) =====
 	UFUNCTION(BlueprintCallable, Category = "AI|Data")
 	UEnemyActionDataAsset* GetEnemyData() const { return EnemyDataAsset; }
-
+	
+	virtual void Tick(float DeltaTime) override;
+	// ===== 타격 판정 제어 함수 =====
+	void StartWeaponTrace();
+	void StopWeaponTrace();
+	
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
@@ -39,6 +44,9 @@ protected:
 	// ===== 강인도 시스템 내부 상태 =====
 	float CurrentPoise = 100.0f;
 	bool bIsGroggy = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Weapon")
+	float WeaponTraceRadius = 25.0f;
 
 private:
 	void ResetHitState();
@@ -56,4 +64,9 @@ private:
 	FTimerHandle PoiseRecoveryTimerHandle;
 
 	bool bIsHitBacking = false;
+	
+	void WeaponTraceTick();
+	bool bIsWeaponTracing = false;
+	UPROPERTY()
+	TArray<AActor*> HitActors;
 };
