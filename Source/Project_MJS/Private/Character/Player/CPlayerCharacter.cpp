@@ -2,6 +2,7 @@
 
 #include "Character/Player/CPlayerController.h"
 #include "Character/Player/Component/AttackComponent.h"
+#include "Character/Player/Component/SkillComponent.h"
 #include "Character/Player/Component/DodgeComponent.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Character/Player/Component/TargetingComponent.h"
@@ -18,6 +19,7 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 	PlayerMovementComponent = Cast<UPlayerMovementComponent>(GetCharacterMovement());
 	DodgeComponent = CreateDefaultSubobject<UDodgeComponent>(TEXT("DodgeComponent"));
 	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
+	SkillComponent = CreateDefaultSubobject<USkillComponent>(TEXT("SkillComponent"));
 	TargetingComponent = CreateDefaultSubobject<UTargetingComponent>(TEXT("TargetingComponent"));
 	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));

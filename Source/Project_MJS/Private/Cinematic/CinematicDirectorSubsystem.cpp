@@ -1,5 +1,5 @@
 #include "Cinematic/CinematicDirectorSubsystem.h"
-
+#include "MovieSceneObjectBindingID.h"
 #include "Camera/PlayerCameraManager.h"
 #include "Cinematic/CinematicParticipant.h"
 #include "Components/ActorComponent.h"
@@ -14,6 +14,7 @@
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
 #include "MovieSceneSequencePlaybackSettings.h"
+#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY(LogCinematicSystem);
 
@@ -50,15 +51,27 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 	}
 
 	FMovieSceneSequencePlaybackSettings PlaybackSettings;
+
 	ALevelSequenceActor* CreatedSequenceActor = nullptr;
-	ActiveSequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(World, Request.Sequence, PlaybackSettings, CreatedSequenceActor);
+	ActiveSequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(
+		World,
+		Request.Sequence,
+		PlaybackSettings,
+		CreatedSequenceActor
+	);
+
 	ActiveSequenceActor = CreatedSequenceActor;
+
 	if (!ActiveSequencePlayer)
 	{
 		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: could not create LevelSequencePlayer. Sequence=%s"), *GetNameSafe(Request.Sequence));
 		ActiveSequenceActor = nullptr;
 		return false;
 	}
+
+	ActiveSequencePlayer->SetCompletionModeOverride(
+		EMovieSceneCompletionModeOverride::ForceKeepState
+	);
 
 	ActivePlayerController = ResolvePlayerController(Request);
 	PreviousViewTarget = ActivePlayerController ? ActivePlayerController->GetViewTarget() : nullptr;
@@ -114,7 +127,60 @@ void UCinematicDirectorSubsystem::FinishCinematic(bool bStopPlayback)
 		}
 	}
 
+	const bool bNaturalFinish = !bStopPlayback;
+
+	TWeakObjectPtr<APawn> PawnToPreserve;
+	FTransform CinematicEndTransform = FTransform::Identity;
+	bool bShouldPreservePawnTransform = false;
+
+	if (bNaturalFinish && ActivePlayerController)
+	{
+		APawn* Pawn = ActivePlayerController->GetPawn();
+		if (IsValid(Pawn))
+		{
+			PawnToPreserve = Pawn;
+			CinematicEndTransform = Pawn->GetActorTransform();
+			bShouldPreservePawnTransform = true;
+
+			UE_LOG(LogCinematicSystem, Log,
+				TEXT("Cached real player pawn cinematic end transform. Pawn=%s Location=%s Rotation=%s"),
+				*GetNameSafe(Pawn),
+				*CinematicEndTransform.GetLocation().ToCompactString(),
+				*CinematicEndTransform.Rotator().ToCompactString());
+		}
+	}
+
 	NotifyParticipantsEnded();
+
+	if (bShouldPreservePawnTransform)
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick([PawnToPreserve, CinematicEndTransform]()
+			{
+				APawn* Pawn = PawnToPreserve.Get();
+				if (!IsValid(Pawn))
+				{
+					return;
+				}
+
+				const bool bTeleported = Pawn->TeleportTo(
+					CinematicEndTransform.GetLocation(),
+					CinematicEndTransform.Rotator(),
+					false,
+					true
+				);
+
+				UE_LOG(LogCinematicSystem, Log,
+					TEXT("Preserved player cinematic end transform %s. Pawn=%s Location=%s Rotation=%s"),
+					bTeleported ? TEXT("succeeded") : TEXT("failed"),
+					*GetNameSafe(Pawn),
+					*CinematicEndTransform.GetLocation().ToCompactString(),
+					*CinematicEndTransform.Rotator().ToCompactString());
+			});
+		}
+	}
+
 	RestoreViewTarget();
 
 	if (IsValid(ActiveSequenceActor))
@@ -256,6 +322,21 @@ void UCinematicDirectorSubsystem::ApplyBindingOverrides(const FCinematicPlayback
 			UE_LOG(LogCinematicSystem, Warning, TEXT("Cinematic binding override skipped: Tag=%s has no valid actors."), *BindingOverride.BindingTag.ToString());
 			continue;
 		}
+
+		const FMovieSceneObjectBindingID ExistingBinding = ActiveSequenceActor->FindNamedBinding(BindingOverride.BindingTag);
+		if (!ExistingBinding.IsValid())
+		{
+			UE_LOG(LogCinematicSystem, Warning,
+				TEXT("Cinematic binding override failed: Binding Tag '%s' was not found in the active sequence. If this tag is inside a Subsequence, move the binding/tag to the Master Sequence."),
+				*BindingOverride.BindingTag.ToString());
+			continue;
+		}
+
+		UE_LOG(LogCinematicSystem, Log,
+			TEXT("Applying cinematic binding override. Tag=%s ActorCount=%d AllowAssetBinding=%s"),
+			*BindingOverride.BindingTag.ToString(),
+			BoundActors.Num(),
+			BindingOverride.bAllowBindingsFromAsset ? TEXT("true") : TEXT("false"));
 
 		ActiveSequenceActor->SetBindingByTag(BindingOverride.BindingTag, BoundActors, BindingOverride.bAllowBindingsFromAsset);
 	}
