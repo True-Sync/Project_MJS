@@ -17,7 +17,7 @@ bool UCinematicActionComponent::PlayCinematic(ULevelSequence* Sequence, bool bAf
 	Request.Sequence = Sequence;
 	Request.InstigatorActor = GetOwner();
 	Request.SubjectActor = GetOwner();
-	Request.bAffectAllParticipants = bAffectAllParticipants;
+	Request.ParticipantScope = bAffectAllParticipants ? ECinematicParticipantScope::AllInWorld : ECinematicParticipantScope::ExplicitOnly;
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = FMath::Max(0.0f, BlendOutTime);
 
@@ -43,7 +43,7 @@ bool UCinematicActionComponent::PlayAnchoredCinematic(
 	Request.Sequence = Sequence;
 	Request.InstigatorActor = GetOwner();
 	Request.SubjectActor = GetOwner();
-	Request.bAffectAllParticipants = bAffectAllParticipants;
+	Request.ParticipantScope = bAffectAllParticipants ? ECinematicParticipantScope::AllInWorld : ECinematicParticipantScope::ExplicitOnly;
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = FMath::Max(0.0f, BlendOutTime);
 	Request.AnchorMode = AnchorMode;
@@ -76,7 +76,7 @@ bool UCinematicActionComponent::SubmitCinematicRequest(FCinematicPlaybackRequest
 	UCinematicDirectorSubsystem* DirectorSubsystem = World ? World->GetSubsystem<UCinematicDirectorSubsystem>() : nullptr;
 	if (!DirectorSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: CinematicDirectorSubsystem is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: CinematicDirectorSubsystem is missing."));
 		return false;
 	}
 

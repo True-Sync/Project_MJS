@@ -15,24 +15,26 @@
 #include "LevelSequencePlayer.h"
 #include "MovieSceneSequencePlaybackSettings.h"
 
+DEFINE_LOG_CATEGORY(LogCinematicSystem);
+
 bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest& Request)
 {
 	if (!Request.Sequence)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: Sequence is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: Sequence is missing."));
 		return false;
 	}
 
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: World is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: World is missing."));
 		return false;
 	}
 
 	if (!ShouldAllowPlaybackForNetworkPolicy(Request))
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("PlayCinematic skipped by network policy. Sequence=%s Policy=%d"), *GetNameSafe(Request.Sequence), static_cast<int32>(Request.NetworkPolicy));
+		UE_LOG(LogCinematicSystem, Verbose, TEXT("PlayCinematic skipped by network policy. Sequence=%s Policy=%d"), *GetNameSafe(Request.Sequence), static_cast<int32>(Request.NetworkPolicy));
 		return false;
 	}
 
@@ -40,7 +42,7 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 	{
 		if (!Request.bStopPreviousCinematic)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PlayCinematic rejected: another cinematic is already active."));
+			UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic rejected: another cinematic is already active."));
 			return false;
 		}
 
@@ -53,7 +55,7 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 	ActiveSequenceActor = CreatedSequenceActor;
 	if (!ActiveSequencePlayer)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: could not create LevelSequencePlayer. Sequence=%s"), *GetNameSafe(Request.Sequence));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: could not create LevelSequencePlayer. Sequence=%s"), *GetNameSafe(Request.Sequence));
 		ActiveSequenceActor = nullptr;
 		return false;
 	}
@@ -76,7 +78,7 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 	ActiveSequencePlayer->OnFinished.AddDynamic(this, &UCinematicDirectorSubsystem::HandleSequenceFinished);
 	ActiveSequencePlayer->Play();
 
-	UE_LOG(LogTemp, Log, TEXT("PlayCinematic succeeded: Sequence=%s Participants=%d"), *GetNameSafe(Request.Sequence), ActiveParticipants.Num());
+	UE_LOG(LogCinematicSystem, Log, TEXT("PlayCinematic succeeded: Sequence=%s Participants=%d"), *GetNameSafe(Request.Sequence), ActiveParticipants.Num());
 	return true;
 }
 
@@ -132,9 +134,38 @@ void UCinematicDirectorSubsystem::FinishCinematic(bool bStopPlayback)
 
 void UCinematicDirectorSubsystem::RestoreViewTarget()
 {
-	if (bShouldRestoreViewTarget && ActivePlayerController && PreviousViewTarget)
+	if (!bShouldRestoreViewTarget || !ActivePlayerController)
 	{
-		ActivePlayerController->SetViewTargetWithBlend(PreviousViewTarget, ActiveBlendOutTime);
+		return;
+	}
+
+	AActor* TargetToRestore = nullptr;
+
+	// 1. 저장된 PreviousViewTarget이 유효하면 사용 (IsValid는 PendingKill까지 체크)
+	if (AActor* PrevActor = Cast<AActor>(PreviousViewTarget))
+	{
+		if (IsValid(PrevActor))
+		{
+			TargetToRestore = PrevActor;
+		}
+	}
+
+	// 2. 유효하지 않다면 현재 플레이어 컨트롤러의 Pawn을 폴백으로 사용
+	if (!TargetToRestore)
+	{
+		if (APawn* CurrentPawn = ActivePlayerController->GetPawn())
+		{
+			if (IsValid(CurrentPawn))
+			{
+				TargetToRestore = CurrentPawn;
+			}
+		}
+	}
+
+	// 3. 최종적으로 타겟이 있으면 부드럽게 복구
+	if (TargetToRestore)
+	{
+		ActivePlayerController->SetViewTargetWithBlend(TargetToRestore, ActiveBlendOutTime);
 	}
 }
 
@@ -192,7 +223,7 @@ void UCinematicDirectorSubsystem::BuildActiveContext(const FCinematicPlaybackReq
 	ActiveContext.SubjectActor = Request.SubjectActor;
 	ActiveContext.PlayerController = ActivePlayerController;
 	ActiveContext.SequenceActor = ActiveSequenceActor;
-	ActiveContext.bAffectAllParticipants = Request.bAffectAllParticipants;
+	ActiveContext.ParticipantScope = Request.ParticipantScope;
 	ActiveContext.AnchorWorldTransform = AnchorWorldTransform;
 	ActiveContext.bAppliedDynamicTransform = bAppliedDynamicTransform;
 }
@@ -222,7 +253,7 @@ void UCinematicDirectorSubsystem::ApplyBindingOverrides(const FCinematicPlayback
 
 		if (BoundActors.IsEmpty())
 		{
-			UE_LOG(LogTemp, Warning, TEXT("Cinematic binding override skipped: Tag=%s has no valid actors."), *BindingOverride.BindingTag.ToString());
+			UE_LOG(LogCinematicSystem, Warning, TEXT("Cinematic binding override skipped: Tag=%s has no valid actors."), *BindingOverride.BindingTag.ToString());
 			continue;
 		}
 
@@ -419,9 +450,14 @@ void UCinematicDirectorSubsystem::CollectParticipants(const FCinematicPlaybackRe
 		AddActorParticipants(ParticipantActor);
 	}
 
-	if (!Request.bAffectAllParticipants)
+	switch (Request.ParticipantScope)
 	{
+	case ECinematicParticipantScope::ExplicitOnly:
+		// 이미 Instigator/Subject/AdditionalParticipants만 수집했으므로 종료.
 		return;
+	case ECinematicParticipantScope::AllInWorld:
+	default:
+		break;
 	}
 
 	UWorld* World = GetWorld();

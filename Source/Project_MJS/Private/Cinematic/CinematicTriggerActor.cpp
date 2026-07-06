@@ -43,7 +43,15 @@ bool ACinematicTriggerActor::ActivateCinematic(AActor* TargetActor)
 	UCinematicDirectorSubsystem* DirectorSubsystem = World ? World->GetSubsystem<UCinematicDirectorSubsystem>() : nullptr;
 	if (!DirectorSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("ActivateCinematic failed: CinematicDirectorSubsystem is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("ActivateCinematic failed: CinematicDirectorSubsystem is missing."));
+		return false;
+	}
+
+	// P0-1: 다른 시네마틱이 이미 재생 중일 때 중복 트리거 방지
+	bool bAlreadyPlaying = DirectorSubsystem->IsCinematicPlaying();
+	if (bAlreadyPlaying && !bAllowOverrideWhilePlaying)
+	{
+		UE_LOG(LogCinematicSystem, Verbose, TEXT("ActivateCinematic skipped: another cinematic is already playing and override not allowed."));
 		return false;
 	}
 
@@ -51,10 +59,13 @@ bool ACinematicTriggerActor::ActivateCinematic(AActor* TargetActor)
 	Request.Sequence = Sequence;
 	Request.InstigatorActor = TargetActor;
 	Request.SubjectActor = TargetActor;
-	Request.bAffectAllParticipants = bAffectAllParticipants;
+	Request.ParticipantScope = ParticipantScope;
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = BlendOutTime;
 	Request.NetworkPolicy = NetworkPolicy;
+
+	// 덮어쓰기 허용 시 기존 컷신 중단 명시 (의도적 충돌 방지)
+	Request.bStopPreviousCinematic = bAlreadyPlaying && bAllowOverrideWhilePlaying;
 
 	if (bBindTriggeringActor && !TriggeringActorBindingTag.IsNone())
 	{
