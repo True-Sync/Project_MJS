@@ -5,6 +5,8 @@
 #include "EnemyCharacter.generated.h"
 
 class UAnimMontage;
+class UMaterialInterface;
+class USceneComponent;
 
 UCLASS()
 class PROJECT_MJS_API AEnemyCharacter : public ACharacter
@@ -13,17 +15,19 @@ class PROJECT_MJS_API AEnemyCharacter : public ACharacter
 
 public:
 	AEnemyCharacter();
-	
+
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	FVector GetTargetPointLocation() const;
 
 protected:
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 
-	// 넉백으로 밀려나는 힘의 크기
+	// 피격 시 뒤로 밀리는 기본 힘
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
 	float HitBackForce = 1300.0f;
 
-	// === 방향별 피격 애니메이션 몽타주 ===
+	// ===== 방향별 피격 애니메이션 몽타주 =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
 	TObjectPtr<UAnimMontage> HitMontageFront;
 
@@ -36,28 +40,29 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
 	TObjectPtr<UAnimMontage> HitMontageRight;
 
-private:
-	// 넉백이 끝난 후 상태를 복구하는 함수
-	void ResetHitState();
-
-	FTimerHandle HitRecoveryTimerHandle;
-	bool bIsHitBacking = false;
-	
-protected:
-	// === 피격 피드백 (머티리얼 오버레이) ===
-	
-	// 에디터에서 할당할 하얗게 번쩍이는 머티리얼
+	// ===== 피격 피드백 =====
+	// 피격 순간 잠깐 적용할 오버레이 머티리얼
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
-	UMaterialInterface* HitFlashMaterial;
+	TObjectPtr<UMaterialInterface> HitFlashMaterial;
 
-	// 번쩍임이 유지되는 시간 (보통 0.05초 ~ 0.1초가 가장 타격감이 좋습니다)
+	// 피격 오버레이 머티리얼이 유지되는 시간 (보통 0.05초 ~ 0.1초가 가장 타격감이 좋습니다)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
 	float HitFlashDuration = 0.1f;
 
 private:
-	// 머티리얼 복구를 위한 타이머 핸들
+	void ResetHitState();
+	void ClearHitFlash();
+
+	// 타겟팅 UI와 카메라 포커스가 바라볼 몸통 기준 위치
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> TargetPointComponent;
+
+	// TargetPointComponent가 루트 기준으로 떠 있는 높이
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
+	float TargetPointHeight = 55.0f;
+
+	FTimerHandle HitRecoveryTimerHandle;
 	FTimerHandle HitFlashTimerHandle;
 
-	// 번쩍임 효과를 지우는 함수
-	void ClearHitFlash();
+	bool bIsHitBacking = false;
 };

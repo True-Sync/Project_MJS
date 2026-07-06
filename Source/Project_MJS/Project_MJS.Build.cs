@@ -21,10 +21,11 @@ public class Project_MJS : ModuleRules
 			"MovieSceneTracks",
 			"CinematicCamera",
 			"Niagara",
-			"AIModule"
+			"AIModule",
+			"UMG"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor", "FMODStudioEditor", "FMODStudioEditor" });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

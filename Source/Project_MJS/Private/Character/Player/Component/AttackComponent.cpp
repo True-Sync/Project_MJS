@@ -4,6 +4,7 @@
 #include "Character/Player/CPlayerCharacter.h"
 #include "Character/Player/Component/DodgeComponent.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
+#include "Character/Player/Component/TargetingComponent.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
@@ -110,10 +111,27 @@ bool UAttackComponent::PlayCombo(int32 ComboIndex)
 
 	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter))
 	{
-		FVector AttackDirection;
-		if (PlayerCharacter->GetLastMoveWorldDirection(AttackDirection))
+		bool bRotatedToTarget = false;
+		if (const UTargetingComponent* TargetingComponent = PlayerCharacter->GetTargetingComponent())
 		{
-			OwnerCharacter->SetActorRotation(AttackDirection.Rotation());
+			if (const AActor* TargetActor = TargetingComponent->GetBestAttackTarget())
+			{
+				const FVector TargetDirection = (TargetActor->GetActorLocation() - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
+				if (!TargetDirection.IsNearlyZero())
+				{
+					OwnerCharacter->SetActorRotation(TargetDirection.Rotation());
+					bRotatedToTarget = true;
+				}
+			}
+		}
+
+		if (!bRotatedToTarget)
+		{
+			FVector AttackDirection;
+			if (PlayerCharacter->GetLastMoveWorldDirection(AttackDirection))
+			{
+				OwnerCharacter->SetActorRotation(AttackDirection.Rotation());
+			}
 		}
 	}
 
@@ -237,9 +255,10 @@ void UAttackComponent::CheckWeaponTrace()
 		if (bHit && HitResult.GetActor())
 		{
 			AActor* HitActor = HitResult.GetActor();
-			if (!HitActors.Contains(HitActor))
+			const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+			if (!HitActors.Contains(HitActorPtr))
 			{
-				HitActors.Add(HitActor); 
+				HitActors.Add(HitActorPtr); 
 				
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
 				AController* InstigatorController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
@@ -314,9 +333,10 @@ void UAttackComponent::CheckKickTrace()
 	if (bHit && HitResult.GetActor())
 	{
 		AActor* HitActor = HitResult.GetActor();
-		if (!HitActors.Contains(HitActor))
+		const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+		if (!HitActors.Contains(HitActorPtr))
 		{
-			HitActors.Add(HitActor);
+			HitActors.Add(HitActorPtr);
 			
 			AController* InstigatorController = OwnerCharacter->GetController();
 			

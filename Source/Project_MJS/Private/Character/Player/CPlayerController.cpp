@@ -4,13 +4,14 @@
 #include "Character/Player/CPlayerController.h"
 
 #include "Camera/CameraRigActor.h"
-#include "Camera/PlayerCameraManager.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Character/Player/CPlayerHUD.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
+#include "Character/Player/Component/TargetingComponent.h"
 #include "Cinematic/CinematicInputLockSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "EngineUtils.h"
+#include "FMODAmbientSoundActorFactory.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
 
@@ -27,16 +28,21 @@ void ACPlayerController::BeginPlay()
 	}
 
 	InitializeCameraRig();
+	BindToTargetingComponent();
+}
+
+void ACPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	UnbindFromTargetingComponent();
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACPlayerController::OnPossess(APawn* InPawn)
 {
 	Super::OnPossess(InPawn);
 
-	if (CameraRig)
-	{
-		CameraRig->SetCameraTarget(InPawn);
-	}
+	EnsureCameraRig();
+	BindToTargetingComponent();
 }
 
 void ACPlayerController::SetupInputComponent()
@@ -83,6 +89,23 @@ void ACPlayerController::SetupInputComponent()
 	{
 		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_Dodge is not assigned."));
 	}
+
+	if (IA_HardTarget)
+	{
+		EnhancedInputComponent->BindAction(IA_HardTarget, ETriggerEvent::Started, this, &ACPlayerController::OnHardTargetInput);
+	}
+
+	if (IA_RangedHardTarget)
+	{
+		EnhancedInputComponent->BindAction(IA_RangedHardTarget, ETriggerEvent::Triggered, this, &ACPlayerController::OnRangedHardTargetTriggered);
+		EnhancedInputComponent->BindAction(IA_RangedHardTarget, ETriggerEvent::Completed, this, &ACPlayerController::OnRangedHardTargetCompleted);
+		EnhancedInputComponent->BindAction(IA_RangedHardTarget, ETriggerEvent::Canceled, this, &ACPlayerController::OnRangedHardTargetCanceled);
+	}
+
+	if (IA_ClearTargeting)
+	{
+		EnhancedInputComponent->BindAction(IA_ClearTargeting, ETriggerEvent::Started, this, &ACPlayerController::OnClearHardTargetInput);
+	}
 }	
 
 FRotator ACPlayerController::GetCameraYawRotation() const
@@ -92,35 +115,84 @@ FRotator ACPlayerController::GetCameraYawRotation() const
 
 void ACPlayerController::InitializeCameraRig()
 {
-	if (CameraRig)
+	EnsureCameraRig();
+}
+
+ACameraRigActor* ACPlayerController::EnsureCameraRig()
+{
+	if (!IsValid(CameraRig))
 	{
-		return;
+		if (CameraRig)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("CameraRig was invalid. Respawning CameraRig."));
+		}
+		CameraRig = SpawnCameraRig();
 	}
 
+	ApplyCameraRigToCurrentPawn();
+	return CameraRig;
+}
+
+ACameraRigActor* ACPlayerController::SpawnCameraRig()
+{
 	UWorld* World = GetWorld();
 	if (!World)
 	{
+		return nullptr;
+	}
+
+	UClass* SpawnClass = CameraRigClass ? CameraRigClass.Get() : ACameraRigActor::StaticClass();
+	const FVector RigSpawnLocation = GetPawn() ? GetPawn()->GetActorLocation() : FVector::ZeroVector;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = GetPawn();
+
+	return World->SpawnActor<ACameraRigActor>(SpawnClass, RigSpawnLocation, FRotator::ZeroRotator, SpawnParams);
+}
+
+void ACPlayerController::ApplyCameraRigToCurrentPawn()
+{
+	if (!CameraRig)
+	{
 		return;
 	}
 
-	for (TActorIterator<ACameraRigActor> It(World); It; ++It)
+	CameraRig->SetCameraTarget(GetPawn());
+	if (GetViewTarget() != CameraRig)
 	{
-		CameraRig = *It;
-		break;
-	}
-
-	if (!CameraRig)
-	{
-		UClass* SpawnClass = CameraRigClass ? CameraRigClass.Get() : ACameraRigActor::StaticClass();
-		const FVector RigSpawnLocation = GetPawn() ? GetPawn()->GetActorLocation() : FVector::ZeroVector;
-		CameraRig = World->SpawnActor<ACameraRigActor>(SpawnClass, RigSpawnLocation, FRotator::ZeroRotator);
-	}
-
-	if (CameraRig)
-	{
-		CameraRig->SetCameraTarget(GetPawn());
 		SetViewTarget(CameraRig);
 	}
+}
+
+void ACPlayerController::BindToTargetingComponent()
+{
+	UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent();
+	if (!TargetingComponent || BoundTargetingComponent.Get() == TargetingComponent)
+	{
+		return;
+	}
+
+	UnbindFromTargetingComponent();
+
+	TargetingComponent->OnTargetingDisplayUpdated.AddUObject(this, &ACPlayerController::HandleTargetingDisplayUpdated);
+	TargetingComponent->OnTargetingDisplayCleared.AddUObject(this, &ACPlayerController::HandleTargetingDisplayCleared);
+	TargetingComponent->OnHardTargetChanged.AddUObject(this, &ACPlayerController::HandleHardTargetChanged);
+	BoundTargetingComponent = TargetingComponent;
+
+	HandleHardTargetChanged(TargetingComponent->GetHardTarget());
+}
+
+void ACPlayerController::UnbindFromTargetingComponent()
+{
+	if (UTargetingComponent* TargetingComponent = BoundTargetingComponent.Get())
+	{
+		TargetingComponent->OnTargetingDisplayUpdated.RemoveAll(this);
+		TargetingComponent->OnTargetingDisplayCleared.RemoveAll(this);
+		TargetingComponent->OnHardTargetChanged.RemoveAll(this);
+	}
+
+	BoundTargetingComponent.Reset();
 }
 
 void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
@@ -132,10 +204,10 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 
 	const FVector2D MoveInput = Value.Get<FVector2D>();
 
-	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
 	if (!PlayerCharacter)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
+		UE_LOG(LogTemp, Warning, TEXT("OnMoveInput failed: Pawn is not ACPlayerCharacter."));
 		return;
 	}
 	
@@ -144,7 +216,7 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnJumpInput()
 {
-	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
 	if (!PlayerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("OnJumpInput failed: Pawn is not ACPlayerCharacter."));
@@ -171,9 +243,9 @@ void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 		return;
 	}
 
-	if (CameraRig)
+	if (ACameraRigActor* CurrentCameraRig = EnsureCameraRig())
 	{
-		CameraRig->AddLookInput(LookInput);
+		CurrentCameraRig->AddLookInput(LookInput);
 	}
 }
 
@@ -184,7 +256,7 @@ void ACPlayerController::OnDodgeInput()
 		return;
 	}
 
-	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
 	if (!PlayerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("OnDodgeInput failed: Pawn is not ACPlayerCharacter."));
@@ -214,7 +286,7 @@ void ACPlayerController::OnAttackInput()
 		return;
 	}
 
-	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
 	
 	if (!PlayerCharacter)
 	{
@@ -223,6 +295,96 @@ void ACPlayerController::OnAttackInput()
 	}
 
 	PlayerCharacter->RequestAttack();
+}
+
+void ACPlayerController::OnHardTargetInput()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
+	{
+		TargetingComponent->RequestHardTarget();
+	}
+}
+
+void ACPlayerController::OnRangedHardTargetTriggered()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
+	{
+		TargetingComponent->BeginRangedHardTargetAim();
+	}
+}
+
+void ACPlayerController::OnRangedHardTargetCompleted()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
+	{
+		TargetingComponent->CompleteRangedHardTargetAim();
+	}
+}
+
+void ACPlayerController::OnRangedHardTargetCanceled()
+{
+	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
+	{
+		TargetingComponent->CancelRangedHardTargetAim();
+	}
+}
+
+void ACPlayerController::OnClearHardTargetInput()
+{
+	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
+	{
+		TargetingComponent->ClearHardTarget();
+	}
+}
+
+void ACPlayerController::HandleTargetingDisplayUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers)
+{
+	if (ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD()))
+	{
+		PlayerHUD->OnTargetingHUDUpdated(bShowCrosshair, Markers);
+	}
+}
+
+void ACPlayerController::HandleTargetingDisplayCleared()
+{
+	if (ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD()))
+	{
+		PlayerHUD->OnTargetingHUDCleared();
+	}
+}
+
+void ACPlayerController::HandleHardTargetChanged(AActor* NewHardTarget)
+{
+	if (ACameraRigActor* CurrentCameraRig = EnsureCameraRig())
+	{
+		CurrentCameraRig->SetFocusTarget(NewHardTarget);
+	}
+}
+
+ACPlayerCharacter* ACPlayerController::GetPlayerCharacter() const
+{
+	return Cast<ACPlayerCharacter>(GetPawn());
+}
+
+UTargetingComponent* ACPlayerController::GetPlayerTargetingComponent() const
+{
+	const ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
+	return PlayerCharacter ? PlayerCharacter->GetTargetingComponent() : nullptr;
 }
 
 bool ACPlayerController::IsCinematicMoveInputLocked() const

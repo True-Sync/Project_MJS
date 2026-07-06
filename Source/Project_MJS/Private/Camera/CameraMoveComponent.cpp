@@ -1,5 +1,6 @@
 #include "Camera/CameraMoveComponent.h"
 
+#include "Character/Enemy/EnemyCharacter.h"
 #include "GameFramework/SpringArmComponent.h"
 
 UCameraMoveComponent::UCameraMoveComponent()
@@ -41,6 +42,11 @@ void UCameraMoveComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 		Owner->SetActorLocation(FMath::VInterpTo(Owner->GetActorLocation(), DesiredLocation, DeltaTime, LocationInterpSpeed));
 	}
 
+	if (FocusTargetActor.IsValid())
+	{
+		UpdateRotationToFocusTarget();
+	}
+
 	const FRotator DesiredRotation = GetCameraRotation();
 	Owner->SetActorRotation(FMath::RInterpTo(Owner->GetActorRotation(), DesiredRotation, DeltaTime, RotationInterpSpeed));
 
@@ -71,9 +77,29 @@ void UCameraMoveComponent::SetCameraTarget(AActor* NewTarget)
 	}
 }
 
+void UCameraMoveComponent::SetFocusTarget(AActor* NewFocusTarget)
+{
+	FocusTargetActor = NewFocusTarget;
+	if (FocusTargetActor.IsValid())
+	{
+		UpdateRotationToFocusTarget();
+	}
+	else if (const AActor* Owner = GetOwner())
+	{
+		const FRotator OwnerRotation = Owner->GetActorRotation();
+		TargetYaw = OwnerRotation.Yaw;
+		TargetPitch = FMath::Clamp(OwnerRotation.Pitch, MinPitch, MaxPitch);
+	}
+}
+
 void UCameraMoveComponent::AddLookInput(const FVector2D& LookInput)
 {
 	if (LookInput.IsNearlyZero())
+	{
+		return;
+	}
+
+	if (bIgnoreLookInputWhileFocused && FocusTargetActor.IsValid())
 	{
 		return;
 	}
@@ -112,4 +138,33 @@ FRotator UCameraMoveComponent::GetCameraRotation() const
 FRotator UCameraMoveComponent::GetCameraYawRotation() const
 {
 	return FRotator(0.0f, TargetYaw, 0.0f);
+}
+
+void UCameraMoveComponent::UpdateRotationToFocusTarget()
+{
+	const AActor* Owner = GetOwner();
+	if (!Owner || !FocusTargetActor.IsValid())
+	{
+		return;
+	}
+
+	const FVector FocusDirection = (GetFocusWorldLocation() - Owner->GetActorLocation()).GetSafeNormal();
+	if (FocusDirection.IsNearlyZero())
+	{
+		return;
+	}
+
+	const FRotator FocusRotation = FocusDirection.Rotation();
+	TargetYaw = FocusRotation.Yaw;
+	TargetPitch = FMath::Clamp(FocusRotation.Pitch, MinPitch, MaxPitch);
+}
+
+FVector UCameraMoveComponent::GetFocusWorldLocation() const
+{
+	if (const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(FocusTargetActor.Get()))
+	{
+		return EnemyCharacter->GetTargetPointLocation();
+	}
+
+	return FocusTargetActor.IsValid() ? FocusTargetActor->GetActorLocation() : FVector::ZeroVector;
 }

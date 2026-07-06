@@ -32,7 +32,8 @@ bool UDodgeComponent::RequestDodge()
 	}
 
 	FVector DodgeDirection;
-	const bool bHasMoveInput = Cast<ACPlayerCharacter>(OwnerCharacter) && Cast<ACPlayerCharacter>(OwnerCharacter)->GetLastMoveWorldDirection(DodgeDirection);
+	const ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter);
+	const bool bHasMoveInput = PlayerCharacter && PlayerCharacter->GetLastMoveWorldDirection(DodgeDirection);
 	UAnimMontage* MontageToPlay = bHasMoveInput ? DefaultDodgeMontage.Get() : BackStepDodgeMontage.Get();
 	if (!MontageToPlay)
 	{

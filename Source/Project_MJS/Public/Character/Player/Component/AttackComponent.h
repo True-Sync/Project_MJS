@@ -64,9 +64,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndKickAttack();
+
+private:
 	
 	// 이전에 이미 타격한 대상을 중복 타격하지 않기 위한 리스트
-	TArray<AActor*> HitActors;
+	TSet<TWeakObjectPtr<AActor>> HitActors;
 
 	
 protected:
