@@ -258,7 +258,10 @@ void AEnemyCharacter::WeaponTraceTick()
 		for (const FHitResult& Hit : HitResults)
 		{
 			AActor* HitActor = Hit.GetActor();
-			
+			if (HitActor && HitActor->IsA<AEnemyCharacter>())
+			{
+				continue;
+			}
 			if (HitActor && !HitActors.Contains(HitActor))
 			{
 				HitActors.Add(HitActor); 
