@@ -71,8 +71,10 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bEnabled = true;
 
+	// 시네마틱 참가자(ICinematicParticipant) 수집 범위. 
+	// 기본값은 ExplicitOnly: 불필요한 전역 스캔을 피하고 충돌 위험을 줄인다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
-	bool bAffectAllParticipants = true;
+	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bRestoreViewTarget = true;
@@ -80,6 +82,11 @@ private:
 	// 트리거 컷신에 들어가기 직전 재생 중이던 공격/회피 몽타주를 끊습니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bStopTargetMontagesOnTrigger = true;
+
+	// 다른 시네마틱이 이미 재생 중일 때 이 트리거가 기존 컷신을 덮어쓸지 결정합니다.
+	// false면 현재 시네마틱이 끝날 때까지 이 트리거는 무시됩니다 (중복/충돌 방지).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	bool bAllowOverrideWhilePlaying = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float BlendOutTime = 0.15f;
