@@ -9,6 +9,7 @@
 
 class UPlayerMovementComponent;
 class UAttackComponent;
+class USkillComponent;
 class UCinematicActionComponent;
 class UCinematicParticipantComponent;
 class UDodgeComponent;
@@ -54,6 +55,9 @@ private:
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Attack", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UAttackComponent> AttackComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Skill", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USkillComponent> SkillComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Targeting", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UTargetingComponent> TargetingComponent;
