@@ -100,12 +100,20 @@ void ACPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComponent->BindAction(IA_Skill1, ETriggerEvent::Started, this, &ACPlayerController::OnSkill1Input);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_SKill1 is not assigned."));
+	}
 
 	if (IA_Skill2)
 	{
 		EnhancedInputComponent->BindAction(IA_Skill2, ETriggerEvent::Started, this, &ACPlayerController::OnSkill2Input);
 	}
-
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_SKill2 is not assigned."));
+	}
+	
 	if (IA_HardTarget)
 	{
 		EnhancedInputComponent->BindAction(IA_HardTarget, ETriggerEvent::Started, this, &ACPlayerController::OnHardTargetInput);
