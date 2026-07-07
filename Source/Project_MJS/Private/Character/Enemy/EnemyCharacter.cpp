@@ -1,21 +1,35 @@
 #include "Character/Enemy/EnemyCharacter.h"
-
+#include "Character/Enemy/EnemyFSMComponent.h"
+#include "Character/Enemy/EnemyActionDataAsset.h"
 #include "AIController.h"
+#include "DrawDebugHelpers.h"
 #include "TimerManager.h"
+#include "Kismet/GameplayStatics.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Character/Player/Component/AttackComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/DamageEvents.h"
+#include "GameFramework/CharacterMovementComponent.h"
 
 AEnemyCharacter::AEnemyCharacter()
 {
-	PrimaryActorTick.bCanEverTick = false;
+	PrimaryActorTick.bCanEverTick = true;
+	PrimaryActorTick.bStartWithTickEnabled = false;
 
 	TargetPointComponent = CreateDefaultSubobject<USceneComponent>(TEXT("TargetPoint"));
 	TargetPointComponent->SetupAttachment(RootComponent);
 	TargetPointComponent->SetRelativeLocation(FVector(0.0f, 0.0f, TargetPointHeight));
+
+	FSMComponent = CreateDefaultSubobject<UEnemyFSMComponent>(TEXT("FSMComponent"));
+	
+	if (GetCharacterMovement())
+	{
+		GetCharacterMovement()->bUseRVOAvoidance = true;
+		GetCharacterMovement()->AvoidanceConsiderationRadius = 150.0f; // 서로 밀어내는 반경
+		GetCharacterMovement()->AvoidanceWeight = 0.5f; // 회피 가중치
+	}
 }
 
 void AEnemyCharacter::OnConstruction(const FTransform& Transform)
@@ -31,6 +45,29 @@ void AEnemyCharacter::OnConstruction(const FTransform& Transform)
 void AEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	
+	if (EnemyDataAsset)
+	{
+		CurrentPoise = EnemyDataAsset->MaxPoise;
+		if (GetCharacterMovement())
+		{
+			GetCharacterMovement()->MaxWalkSpeed = EnemyDataAsset->PatrolSpeed;
+		}
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("EnemyDataAsset is missing on %s!"), *GetName());
+	}
+}
+
+void AEnemyCharacter::Tick(float DeltaTime)
+{
+	Super::Tick(DeltaTime);
+
+	if (bIsWeaponTracing)
+	{
+		WeaponTraceTick();
+	}
 }
 
 FVector AEnemyCharacter::GetTargetPointLocation() const
@@ -41,35 +78,54 @@ FVector AEnemyCharacter::GetTargetPointLocation() const
 float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
-	if (ActualDamage <= 0.0f)
+	if (ActualDamage <= 0.0f || !EnemyDataAsset)
 	{
 		return ActualDamage;
 	}
 
+	// 1. 강인도(슈퍼아머) 및 보스 판정 로직
+	if (EnemyDataAsset->bHasSuperArmor && !bIsGroggy)
+	{
+		CurrentPoise -= ActualDamage;
+
+		if (EnemyDataAsset->HitFlashMaterial && GetMesh())
+		{
+			GetMesh()->SetOverlayMaterial(EnemyDataAsset->HitFlashMaterial);
+			GetWorldTimerManager().SetTimer(HitFlashTimerHandle, this, &AEnemyCharacter::ClearHitFlash, EnemyDataAsset->HitFlashDuration, false);
+		}
+
+		if (CurrentPoise <= 0.0f)
+		{
+			bIsGroggy = true;
+			if (FSMComponent) FSMComponent->ChangeState(EEnemyState::Stagger);
+			GetWorldTimerManager().SetTimer(PoiseRecoveryTimerHandle, this, &AEnemyCharacter::RecoverPoise, EnemyDataAsset->GroggyDuration, false);
+		}
+		else
+		{
+			return ActualDamage; // 강인도가 남았다면 데미지만 적용 (넉백 무시)
+		}
+	}
+	else if (FSMComponent && !EnemyDataAsset->bHasSuperArmor)
+	{
+		FSMComponent->ChangeState(EEnemyState::Stagger);
+	}
+
+	// 2. 피격 몽타주 재생 및 넉백 로직
 	FVector DirectionToAttacker = FVector::ZeroVector;
 	if (DamageCauser)
 	{
 		DirectionToAttacker = (DamageCauser->GetActorLocation() - GetActorLocation()).GetSafeNormal();
 	}
 
-	UAnimMontage* SelectedMontage = HitMontageFront;
+	UAnimMontage* SelectedMontage = EnemyDataAsset->HitMontageFront;
 	if (!DirectionToAttacker.IsNearlyZero())
 	{
 		const float ForwardDot = FVector::DotProduct(GetActorForwardVector(), DirectionToAttacker);
 		const float RightDot = FVector::DotProduct(GetActorRightVector(), DirectionToAttacker);
 
-		if (ForwardDot >= 0.5f)
-		{
-			SelectedMontage = HitMontageFront;
-		}
-		else if (ForwardDot <= -0.5f)
-		{
-			SelectedMontage = HitMontageBack;
-		}
-		else
-		{
-			SelectedMontage = RightDot > 0.0f ? HitMontageRight : HitMontageLeft;
-		}
+		if (ForwardDot >= 0.5f) SelectedMontage = EnemyDataAsset->HitMontageFront;
+		else if (ForwardDot <= -0.5f) SelectedMontage = EnemyDataAsset->HitMontageBack;
+		else SelectedMontage = RightDot > 0.0f ? EnemyDataAsset->HitMontageRight : EnemyDataAsset->HitMontageLeft;
 	}
 
 	float RecoveryTime = 0.4f;
@@ -83,10 +139,10 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 		}
 	}
 
-	if (HitFlashMaterial && GetMesh())
+	if (EnemyDataAsset->HitFlashMaterial && GetMesh() && !EnemyDataAsset->bHasSuperArmor) 
 	{
-		GetMesh()->SetOverlayMaterial(HitFlashMaterial);
-		GetWorldTimerManager().SetTimer(HitFlashTimerHandle, this, &AEnemyCharacter::ClearHitFlash, HitFlashDuration, false);
+		GetMesh()->SetOverlayMaterial(EnemyDataAsset->HitFlashMaterial);
+		GetWorldTimerManager().SetTimer(HitFlashTimerHandle, this, &AEnemyCharacter::ClearHitFlash, EnemyDataAsset->HitFlashDuration, false);
 	}
 
 	FVector KnockbackDirection = FVector::ZeroVector;
@@ -108,14 +164,11 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 			AIController->StopMovement();
 		}
 
-		float AppliedKnockbackForce = HitBackForce;
+		float AppliedKnockbackForce = EnemyDataAsset->HitBackForce;
 		if (DamageCauser)
 		{
 			UAttackComponent* AttackComp = Cast<UAttackComponent>(DamageCauser->GetComponentByClass(UAttackComponent::StaticClass()));
-			if (AttackComp)
-			{
-				AppliedKnockbackForce = AttackComp->GetCurrentKnockbackForce();
-			}
+			if (AttackComp) AppliedKnockbackForce = AttackComp->GetCurrentKnockbackForce();
 		}
 
 		KnockbackDirection.Z += 0.25f;
@@ -131,12 +184,92 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 void AEnemyCharacter::ResetHitState()
 {
 	bIsHitBacking = false;
+	if (FSMComponent && !bIsGroggy)
+	{
+		FSMComponent->ChangeState(EEnemyState::Idle);
+	}
+}
+
+void AEnemyCharacter::RecoverPoise()
+{
+	if (EnemyDataAsset)
+	{
+		CurrentPoise = EnemyDataAsset->MaxPoise;
+	}
+	bIsGroggy = false;
+	
+	if (FSMComponent)
+	{
+		FSMComponent->ChangeState(EEnemyState::Idle);
+	}
 }
 
 void AEnemyCharacter::ClearHitFlash()
 {
-	if (GetMesh())
+	if (GetMesh()) GetMesh()->SetOverlayMaterial(nullptr);
+}
+
+void AEnemyCharacter::StartWeaponTrace()
+{
+	bIsWeaponTracing = true;
+	SetActorTickEnabled(true);
+	HitActors.Empty(); 
+}
+
+void AEnemyCharacter::StopWeaponTrace()
+{
+	bIsWeaponTracing = false;
+	SetActorTickEnabled(false);
+	HitActors.Empty(); 
+}
+
+// ===== 공격 판정 관련 함수 구현부 =====
+void AEnemyCharacter::WeaponTraceTick()
+{
+	if (!GetMesh()) return;
+
+	FVector StartLoc = GetMesh()->GetSocketLocation(FName("WeaponBase"));
+	FVector EndLoc = GetMesh()->GetSocketLocation(FName("WeaponTip"));
+
+	TArray<FHitResult> HitResults;
+	FCollisionQueryParams QueryParams;
+	QueryParams.AddIgnoredActor(this); 
+
+	bool bHit = GetWorld()->SweepMultiByChannel(
+		HitResults,
+		StartLoc,
+		EndLoc,
+		FQuat::Identity,
+		ECC_Pawn, 
+		FCollisionShape::MakeSphere(WeaponTraceRadius),
+		QueryParams
+	);
+	
+	DrawDebugCapsule(GetWorld(), 
+		(StartLoc + EndLoc) * 0.5f, 
+		FVector::Dist(StartLoc, EndLoc) * 0.5f, WeaponTraceRadius, 
+		(EndLoc - StartLoc).Rotation().Quaternion(), 
+		bHit ? FColor::Red : FColor::Green, 
+		false,
+		0.5f);
+	
+	if (bHit)
 	{
-		GetMesh()->SetOverlayMaterial(nullptr);
+		for (const FHitResult& Hit : HitResults)
+		{
+			AActor* HitActor = Hit.GetActor();
+			if (HitActor && HitActor->IsA<AEnemyCharacter>())
+			{
+				continue;
+			}
+			if (HitActor && !HitActors.Contains(HitActor))
+			{
+				HitActors.Add(HitActor); 
+
+				// 데미지 적용
+				float DamageAmount = 20.0f; 
+				UGameplayStatics::ApplyDamage(HitActor, DamageAmount, GetController(), this, UDamageType::StaticClass());
+			}
+		}
 	}
 }
