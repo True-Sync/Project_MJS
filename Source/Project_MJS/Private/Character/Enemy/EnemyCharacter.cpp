@@ -5,6 +5,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Character/Player/Component/AttackComponent.h"
+#include "Character/SharedComponent/HealthComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/DamageEvents.h"
@@ -16,6 +17,9 @@ AEnemyCharacter::AEnemyCharacter()
 	TargetPointComponent = CreateDefaultSubobject<USceneComponent>(TEXT("TargetPoint"));
 	TargetPointComponent->SetupAttachment(RootComponent);
 	TargetPointComponent->SetRelativeLocation(FVector(0.0f, 0.0f, TargetPointHeight));
+
+	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	HealthComponent->ConfigureDeathBehavior(false, true);
 }
 
 void AEnemyCharacter::OnConstruction(const FTransform& Transform)
@@ -44,6 +48,15 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 	if (ActualDamage <= 0.0f)
 	{
 		return ActualDamage;
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->ReceiveDamage(ActualDamage, EventInstigator, DamageCauser);
+		if (!HealthComponent->IsAlive())
+		{
+			return ActualDamage; // 사망 시 히트 몽타주/넉백 생략
+		}
 	}
 
 	FVector DirectionToAttacker = FVector::ZeroVector;

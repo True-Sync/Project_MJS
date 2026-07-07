@@ -7,6 +7,7 @@
 class UAnimMontage;
 class UMaterialInterface;
 class USceneComponent;
+class UHealthComponent;
 
 UCLASS()
 class PROJECT_MJS_API AEnemyCharacter : public ACharacter
@@ -18,6 +19,7 @@ public:
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	FVector GetTargetPointLocation() const;
+	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
@@ -65,4 +67,7 @@ private:
 	FTimerHandle HitFlashTimerHandle;
 
 	bool bIsHitBacking = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHealthComponent> HealthComponent;
 };
