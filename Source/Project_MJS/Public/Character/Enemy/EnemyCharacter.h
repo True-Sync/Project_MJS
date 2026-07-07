@@ -5,9 +5,9 @@
 #include "EnemyCharacter.generated.h"
 
 class USceneComponent;
+class UHealthComponent;
 class UEnemyFSMComponent;
 class UEnemyActionDataAsset;
-
 UCLASS()
 class PROJECT_MJS_API AEnemyCharacter : public ACharacter
 {
@@ -18,6 +18,7 @@ public:
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 	FVector GetTargetPointLocation() const;
+	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
 	// ===== FSM (AI 상태 제어기) =====
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Component")
@@ -32,6 +33,7 @@ public:
 	void StartWeaponTrace();
 	void StopWeaponTrace();
 	
+
 protected:
 	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
@@ -53,6 +55,9 @@ private:
 	void ClearHitFlash();
 	void RecoverPoise();
 
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHealthComponent> HealthComponent;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<USceneComponent> TargetPointComponent;
 
@@ -64,7 +69,7 @@ private:
 	FTimerHandle PoiseRecoveryTimerHandle;
 
 	bool bIsHitBacking = false;
-	
+
 	void WeaponTraceTick();
 	bool bIsWeaponTracing = false;
 	UPROPERTY()

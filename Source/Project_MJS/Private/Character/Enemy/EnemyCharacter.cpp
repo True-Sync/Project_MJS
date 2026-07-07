@@ -8,6 +8,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Character/Player/Component/AttackComponent.h"
+#include "Character/SharedComponent/HealthComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/DamageEvents.h"
@@ -21,6 +22,9 @@ AEnemyCharacter::AEnemyCharacter()
 	TargetPointComponent = CreateDefaultSubobject<USceneComponent>(TEXT("TargetPoint"));
 	TargetPointComponent->SetupAttachment(RootComponent);
 	TargetPointComponent->SetRelativeLocation(FVector(0.0f, 0.0f, TargetPointHeight));
+
+	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	HealthComponent->ConfigureDeathBehavior(false, true);
 
 	FSMComponent = CreateDefaultSubobject<UEnemyFSMComponent>(TEXT("FSMComponent"));
 	
@@ -81,6 +85,15 @@ float AEnemyCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Damage
 	if (ActualDamage <= 0.0f || !EnemyDataAsset)
 	{
 		return ActualDamage;
+	}
+
+	if (HealthComponent)
+	{
+		HealthComponent->ReceiveDamage(ActualDamage, EventInstigator, DamageCauser);
+		if (!HealthComponent->IsAlive())
+		{
+			return ActualDamage; // 사망 시 히트 몽타주/넉백 생략
+		}
 	}
 
 	// 1. 강인도(슈퍼아머) 및 보스 판정 로직

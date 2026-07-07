@@ -15,6 +15,7 @@ class UCinematicActionComponent;
 class UCinematicParticipantComponent;
 class UDodgeComponent;
 class UTargetingComponent;
+class UHealthComponent;
 
 UCLASS()
 class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicParticipant
@@ -42,6 +43,7 @@ public:
 	UTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
 	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
+	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
 private:
 	UPROPERTY(Transient)
@@ -70,4 +72,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicParticipantComponent> CinematicParticipantComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHealthComponent> HealthComponent;
 };
