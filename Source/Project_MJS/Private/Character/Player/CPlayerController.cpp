@@ -94,6 +94,17 @@ void ACPlayerController::SetupInputComponent()
 		UE_LOG(LogTemp, Warning, TEXT("SetupInputComponent: IA_Dodge is not assigned."));
 	}
 
+
+	if (IA_Skill1)
+	{
+		EnhancedInputComponent->BindAction(IA_Skill1, ETriggerEvent::Started, this, &ACPlayerController::OnSkill1Input);
+	}
+
+	if (IA_Skill2)
+	{
+		EnhancedInputComponent->BindAction(IA_Skill2, ETriggerEvent::Started, this, &ACPlayerController::OnSkill2Input);
+	}
+
 	if (IA_HardTarget)
 	{
 		EnhancedInputComponent->BindAction(IA_HardTarget, ETriggerEvent::Started, this, &ACPlayerController::OnHardTargetInput);
@@ -280,6 +291,41 @@ void ACPlayerController::OnAttackInput()
 	}
 
 	PlayerCharacter->RequestAttack();
+}
+
+
+void ACPlayerController::OnSkill1Input()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnSkill1Input failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+
+	PlayerCharacter->RequestSkill(Skill1Data);
+}
+
+void ACPlayerController::OnSkill2Input()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnSkill2Input failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+
+	PlayerCharacter->RequestSkill(Skill2Data);
 }
 
 void ACPlayerController::OnHardTargetInput()

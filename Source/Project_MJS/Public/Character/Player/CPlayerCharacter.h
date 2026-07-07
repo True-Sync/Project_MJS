@@ -10,6 +10,7 @@
 class UPlayerMovementComponent;
 class UAttackComponent;
 class USkillComponent;
+class USkillDataAsset;
 class UCinematicActionComponent;
 class UCinematicParticipantComponent;
 class UDodgeComponent;
@@ -31,11 +32,13 @@ public:
 	void Move(const FVector2D& MoveInput);
 	void RequestAttack();
 	bool RequestDodge();
+	bool RequestSkill(USkillDataAsset* SkillData);
 
 	// ===== Get/Setter =====
 	bool GetLastMoveWorldDirection(FVector& OutDirection) const;
 	UAttackComponent* GetAttackComponent() const { return AttackComponent; }
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
+	USkillComponent* GetSkillComponent() const { return SkillComponent; }
 	UTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
 	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }

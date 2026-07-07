@@ -89,6 +89,18 @@ bool ACPlayerCharacter::RequestDodge()
 	return DodgeComponent->RequestDodge();
 }
 
+
+bool ACPlayerCharacter::RequestSkill(USkillDataAsset* SkillData)
+{
+	if (!SkillComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RequestSkill failed: SkillComponent is missing."));
+		return false;
+	}
+
+	return SkillComponent->ActivateSkill(SkillData);
+}
+
 bool ACPlayerCharacter::GetLastMoveWorldDirection(FVector& OutDirection) const
 {
 	OutDirection = LastMoveWorldDirection;

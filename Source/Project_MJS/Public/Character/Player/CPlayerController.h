@@ -8,6 +8,7 @@
 class ACameraRigActor;
 class UInputAction;
 class UInputMappingContext;
+class USkillDataAsset;
 class UTargetingComponent;
 struct FInputActionValue;
 
@@ -39,6 +40,8 @@ private:
 	void OnLookInput(const FInputActionValue& Value);
 	void OnDodgeInput();
 	void OnAttackInput();
+	void OnSkill1Input();
+	void OnSkill2Input();
 	void OnHardTargetInput();
 	void OnRangedHardTargetTriggered();
 	void OnRangedHardTargetCompleted();
@@ -72,6 +75,12 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Dodge;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Skill")
+	TObjectPtr<UInputAction> IA_Skill1;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Skill")
+	TObjectPtr<UInputAction> IA_Skill2;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Targeting")
 	TObjectPtr<UInputAction> IA_HardTarget;
 
@@ -81,15 +90,21 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Targeting")
 	TObjectPtr<UInputAction> IA_ClearTargeting;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Skill")
+	TObjectPtr<USkillDataAsset> Skill1Data;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Skill")
+	TObjectPtr<USkillDataAsset> Skill2Data;
+
 	// ===== 카메라 =====
-	// 플레이어 카메라를 담당할 CameraRig 클래스 (비어 있으면 기본 C++ 클래스를 사용)
+	// 플레이어 카메라를 담당할 CameraRig 클래스. 비어 있으면 기본 C++ 클래스를 사용한다.
 	UPROPERTY(EditDefaultsOnly, Category = "Camera")
 	TSubclassOf<ACameraRigActor> CameraRigClass;
 
 	UPROPERTY(Transient)
 	TObjectPtr<ACameraRigActor> CameraRig;
 
-	// 현재 델리게이트를 바인딩해 둔 타겟팅 컴포넌트
+	// 현재 델리게이트를 바인딩해 둔 타겟팅 컴포넌트.
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UTargetingComponent> BoundTargetingComponent;
 };
