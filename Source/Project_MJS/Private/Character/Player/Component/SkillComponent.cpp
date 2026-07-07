@@ -43,11 +43,13 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 {
 	if (!SkillData || !GetWorld() || !CinematicActionComp)
 	{
+		UE_LOG(LogTemp, Error, TEXT("SkillComp : SkillData나 Getworld, CinematicActionComp가 할당되지 않았습니다."));
 		return false;
 	}
 	
 	if (SkillState != ESkillActivationState::Idle || IsSkillCinematicPlaying())
 	{
+		UE_LOG(LogTemp, Warning, TEXT("SkillComp : 이미 스킬이 플레이 중이거나, ESkillActivationState::Idle 상태가 아닙니다."));
 		return false;
 	}
 	
@@ -90,6 +92,8 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 	if (!bPlayedMontage && !bPlayedCinematic)
 	{
 		FinishSkill();
+		UE_LOG(LogTemp, Warning, TEXT("SkillComp : 플레이 할 몽타주나 시네마틱이 할당되지 않았습니다."));
+
 		return false;
 	}
 	
