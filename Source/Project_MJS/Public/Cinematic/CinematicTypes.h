@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Logging/LogMacros.h"
+#include "UObject/ObjectPtr.h"
 #include "CinematicTypes.generated.h"
 
 // 전용 로그 카테고리: 시네마틱 시스템 전체에서 사용
