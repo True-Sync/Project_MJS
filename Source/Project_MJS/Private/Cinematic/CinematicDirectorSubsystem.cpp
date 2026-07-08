@@ -35,12 +35,15 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 
 	if (!ShouldAllowPlaybackForNetworkPolicy(Request))
 	{
+		// 1. LocalOnly, AuthorityOnly, AnyNetMode 같은 값으로 서버에서 재생할지, 클라에서만 재생할지 따지는데...어짜피 로컬임.
 		UE_LOG(LogCinematicSystem, Verbose, TEXT("PlayCinematic skipped by network policy. Sequence=%s Policy=%d"), *GetNameSafe(Request.Sequence), static_cast<int32>(Request.NetworkPolicy));
 		return false;
 	}
 
 	if (ActiveSequencePlayer)
 	{
+		// 2. bStopPreviousCinematic == false면 새 컷신 요청을 거절.
+		// bStopPreviousCinematic == true면 기존 컷신을 강제로 종료하고 새 컷신 시작.
 		if (!Request.bStopPreviousCinematic)
 		{
 			UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic rejected: another cinematic is already active."));
@@ -50,8 +53,9 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 		FinishCinematic(true);
 	}
 
+	// 3. CreateLevelSequencePlayer는 내부적으로 ALevelSequenceActor를 월드에 만들고, 그 시퀀스를 재생할 ULevelSequencePlayer를 반환.
 	FMovieSceneSequencePlaybackSettings PlaybackSettings;
-
+	
 	ALevelSequenceActor* CreatedSequenceActor = nullptr;
 	ActiveSequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(
 		World,
@@ -60,7 +64,8 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 		CreatedSequenceActor
 	);
 
-	ActiveSequenceActor = CreatedSequenceActor;
+	ActiveSequenceActor = CreatedSequenceActor; 
+	// 4. 여기서 생성되는 놈 두가지 저장 : ULevelSequencePlayer -> 실제 재생기 /ALevelSequenceActor -> 월드에 배치된 시퀀스 액터
 
 	if (!ActiveSequencePlayer)
 	{
@@ -68,26 +73,37 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 		ActiveSequenceActor = nullptr;
 		return false;
 	}
+	
+	// 5. 여기까지 왔으면 시퀀서 재생기 생성자체는 성공
 
 	ActiveSequencePlayer->SetCompletionModeOverride(
-		EMovieSceneCompletionModeOverride::ForceKeepState
-	);
+		EMovieSceneCompletionModeOverride::ForceKeepState 
+		/* 
+		 * 6.시퀀스가 끝났을 때 트랙이 적용한 상태를 유지하겠다는 뜻
+		 * 시퀀스에서 액터 위치, 카메라, 가시성, 머티리얼 값 등을 바꿨다면 기본적으로 끝나고 원래대로 돌아갈 수도 있는데, 
+		 * ForceKeepState는 “끝난 상태를 유지” 쪽으로 강제
+		 */
+	); 
 
+	// 7. 컷신 시작 전에 현재 카메라 ViewTarget을 저장
 	ActivePlayerController = ResolvePlayerController(Request);
 	PreviousViewTarget = ActivePlayerController ? ActivePlayerController->GetViewTarget() : nullptr;
 	ActiveBlendOutTime = FMath::Max(0.0f, Request.BlendOutTime);
 	bShouldRestoreViewTarget = Request.bRestoreViewTarget;
 
+	// 8. 동적 앵커 위치를 계산하고 적용. 시퀀스를 그냥 에셋에 저장된 위치에서 재생할 수도 있고, 플레이어 위치나 타겟 방향 기준으로 재생할 수도 있음.
 	FTransform AnchorWorldTransform = FTransform::Identity;
 	bool bAppliedDynamicTransform = false;
 	ApplyDynamicTransform(Request, AnchorWorldTransform, bAppliedDynamicTransform);
-	ApplyBindingOverrides(Request);
+	ApplyBindingOverrides(Request); // 그 다음 바인딩 오버라이드를 적용하고 아래 디버그 앵커 그림
 	DrawDebugAnchorTransform(Request, bAppliedDynamicTransform ? AnchorWorldTransform : (ActiveSequenceActor ? ActiveSequenceActor->GetActorTransform() : FTransform::Identity));
 
+	// 9. 현재 재생 컨텍스트를 만들고서 참가자 수집, 참가자들 컷신 시작대기
 	BuildActiveContext(Request, AnchorWorldTransform, bAppliedDynamicTransform);
 	CollectParticipants(Request);
 	NotifyParticipantsStarted();
 
+	// 10. 그 다음 끝났을 때 호출될 콜백을 등록해서 끝나면 HandleSequenceFinished 자동 호출, 실제 컷신 시작. 
 	ActiveSequencePlayer->OnFinished.AddDynamic(this, &UCinematicDirectorSubsystem::HandleSequenceFinished);
 	ActiveSequencePlayer->Play();
 
@@ -259,11 +275,14 @@ APlayerController* UCinematicDirectorSubsystem::ResolvePlayerController(const FC
 {
 	if (Request.PlayerController)
 	{
+		// 시네마틱 요청자가 넘긴 컨트롤러가 있으면 그대로 그 컨트롤러를 넘김(리턴)
 		return Request.PlayerController;
 	}
 
 	if (const APawn* InstigatorPawn = Cast<APawn>(Request.InstigatorActor))
 	{
+		// 직접 PlayerController가 없으면, InstigatorActor가 Pawn인지 확인함.
+		// 예를 들어 스킬 컷신이면 InstigatorActor는 보통 플레이어 캐릭터일 가능성이 높기 때문.
 		if (APlayerController* PlayerController = Cast<APlayerController>(InstigatorPawn->GetController()))
 		{
 			return PlayerController;
@@ -272,12 +291,14 @@ APlayerController* UCinematicDirectorSubsystem::ResolvePlayerController(const FC
 
 	if (const APawn* SubjectPawn = Cast<APawn>(Request.SubjectActor))
 	{
+		// 위에 Instigator에서도 못 찾으면 SubjectActor에서도 똑같이 찾아봄.
 		if (APlayerController* PlayerController = Cast<APlayerController>(SubjectPawn->GetController()))
 		{
 			return PlayerController;
 		}
 	}
 
+	// fallback : 위에서 다 못 찾으면 월드의 첫 번째 PlayerController를 가져옴
 	UWorld* World = GetWorld();
 	return World ? World->GetFirstPlayerController() : nullptr;
 }
