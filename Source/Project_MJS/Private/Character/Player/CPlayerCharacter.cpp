@@ -8,6 +8,7 @@
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicParticipantComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Engine/DamageEvents.h"
 
 ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UPlayerMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -36,6 +37,24 @@ void ACPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 	
+}
+
+float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
+{
+	if (DodgeComponent)
+	{
+		if (DodgeComponent->TryConsumeJustDodge(DamageCauser))
+		{
+			return 0.0f;
+		}
+
+		if (DodgeComponent->IsDodgeInvincible())
+		{
+			return 0.0f;
+		}
+	}
+
+	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 }
 
 void ACPlayerCharacter::Move(const FVector2D& MoveInput)

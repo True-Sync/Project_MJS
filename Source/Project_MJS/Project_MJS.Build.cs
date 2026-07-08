@@ -25,7 +25,7 @@ public class Project_MJS : ModuleRules
 			"UMG"
 		});
 
-		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor", "FMODStudioEditor", "FMODStudioEditor" });
+		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor" });
 
 		// Uncomment if you are using Slate UI
 		// PrivateDependencyModuleNames.AddRange(new string[] { "Slate", "SlateCore" });

@@ -1,6 +1,9 @@
 #include "Character/Player/Component/DodgeComponent.h"
 
+#include "TimerManager.h"
 #include "Animation/AnimInstance.h"
+#include "Camera/CameraDirectingComponent.h"
+#include "Camera/CameraDirectingComponentFinder.h"
 #include "Character/Player/CPlayerCharacter.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
@@ -8,12 +11,6 @@
 UDodgeComponent::UDodgeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-}
-
-
-void UDodgeComponent::BeginPlay()
-{
-	Super::BeginPlay();
 }
 
 bool UDodgeComponent::RequestDodge()
@@ -66,7 +63,44 @@ bool UDodgeComponent::RequestDodge()
 	AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, MontageToPlay);
 	
 	ActiveDodgeMontage = MontageToPlay;
+	LastDodgeInputTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -999.0f;
+	bJustDodgeConsumed = false;
 	bIsDodging = true;
+	return true;
+}
+
+bool UDodgeComponent::TryConsumeJustDodge(AActor* AttackCauser)
+{
+	if (!bEnableJustDodge || !bIsDodging || bJustDodgeConsumed)
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	const float ElapsedAfterDodgeInput = World->GetTimeSeconds() - LastDodgeInputTime;
+	if (ElapsedAfterDodgeInput < JustDodgeMinElapsed || ElapsedAfterDodgeInput > JustDodgeWindow)
+	{
+		return false;
+	}
+
+	bJustDodgeConsumed = true;
+	HandleJustDodgeSucceeded(AttackCauser);
+	return true;
+}
+
+bool UDodgeComponent::ConsumeJustDodgeCounter()
+{
+	if (!bCanJustDodgeCounter)
+	{
+		return false;
+	}
+
+	CloseJustDodgeCounterWindow();
 	return true;
 }
 
@@ -78,5 +112,105 @@ void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupt
 	}
 
 	bIsDodging = false;
+	bJustDodgeConsumed = false;
 	ActiveDodgeMontage = nullptr;
+}
+
+void UDodgeComponent::HandleJustDodgeSucceeded(AActor* AttackCauser)
+{
+	OpenJustDodgeCounterWindow();
+	PlayJustDodgeCameraFeedback();
+	ApplyJustDodgeTimeFeedback(AttackCauser);
+
+	UE_LOG(LogTemp, Log, TEXT("Just dodge succeeded. Owner=%s AttackCauser=%s"), *GetNameSafe(GetOwner()), *GetNameSafe(AttackCauser));
+}
+
+void UDodgeComponent::PlayJustDodgeCameraFeedback() const
+{
+	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	const USkeletalMeshComponent* MeshComponent = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
+	UCameraDirectingComponent* CameraDirectingComponent = FindCameraDirectingComponentFromMesh(MeshComponent);
+	if (!CameraDirectingComponent)
+	{
+		return;
+	}
+
+	if (bPlayJustDodgeCameraShake && JustDodgeCameraShake)
+	{
+		CameraDirectingComponent->PlayCameraShake(JustDodgeCameraShake, JustDodgeCameraShakeScale);
+	}
+
+	if (bPlayJustDodgeFOV)
+	{
+		CameraDirectingComponent->PlayFOV(JustDodgeFOV, JustDodgeFOVBlendInTime, JustDodgeFOVHoldTime, JustDodgeFOVBlendOutTime);
+	}
+}
+
+void UDodgeComponent::ApplyJustDodgeTimeFeedback(AActor* AttackCauser)
+{
+	if (!bUseJustDodgeTimeFeedback)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UCombatTimeDilationSubsystem* TimeDilationSubsystem = World->GetSubsystem<UCombatTimeDilationSubsystem>();
+	if (!TimeDilationSubsystem)
+	{
+		return;
+	}
+
+	if (JustDodgeTimeFeedbackMode == ECombatTimeDilationFeedbackMode::HitStop)
+	{
+		TimeDilationSubsystem->PlayHitStop(JustDodgeHitStopSettings, GetOwner(), AttackCauser);
+	}
+	else
+	{
+		TimeDilationSubsystem->PlayWorldSlow(JustDodgeWorldSlowSettings);
+	}
+}
+
+void UDodgeComponent::OpenJustDodgeCounterWindow()
+{
+	if (!bEnableJustDodgeCounter)
+	{
+		return;
+	}
+
+	bCanJustDodgeCounter = true;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	World->GetTimerManager().ClearTimer(JustDodgeCounterTimerHandle);
+	if (JustDodgeCounterWindow <= 0.0f)
+	{
+		CloseJustDodgeCounterWindow();
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		JustDodgeCounterTimerHandle,
+		this,
+		&UDodgeComponent::CloseJustDodgeCounterWindow,
+		JustDodgeCounterWindow,
+		false);
+}
+
+void UDodgeComponent::CloseJustDodgeCounterWindow()
+{
+	bCanJustDodgeCounter = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(JustDodgeCounterTimerHandle);
+	}
 }

@@ -21,6 +21,7 @@ class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicPa
 
 public:
 	ACPlayerCharacter(const FObjectInitializer& ObjectInitializer = FObjectInitializer::Get());
+	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 protected:
 	virtual void BeginPlay() override;
