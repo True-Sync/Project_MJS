@@ -41,8 +41,9 @@ private:
 	void OnMoveInput(const FInputActionValue& Value);
 	void OnJumpInput();
 	void OnLookInput(const FInputActionValue& Value);
-	void OnDodgeInput();
+	void OnCameraZoomInput(const FInputActionValue& Value);
 	void OnAttackInput();
+	void OnDodgeInput();
 	void OnHardTargetInput();
 	void OnRangedHardTargetTriggered();
 	void OnRangedHardTargetCompleted();
@@ -70,7 +71,10 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Look;
-
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input")
+	TObjectPtr<UInputAction> IA_CameraZoom;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
 	TObjectPtr<UInputAction> IA_Attack;
 

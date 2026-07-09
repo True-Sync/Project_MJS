@@ -72,6 +72,11 @@ void ACPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &ACPlayerController::OnLookInput);
 	}
 	
+	if (IA_CameraZoom)
+	{
+		EnhancedInputComponent->BindAction(IA_CameraZoom, ETriggerEvent::Triggered, this, &ACPlayerController::OnCameraZoomInput);
+	}
+	
 	if (IA_Attack)
 	{
 		EnhancedInputComponent->BindAction(IA_Attack, ETriggerEvent::Started, this, &ACPlayerController::OnAttackInput);
@@ -249,6 +254,43 @@ void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 	}
 }
 
+void ACPlayerController::OnCameraZoomInput(const FInputActionValue& Value)
+{
+	if (IsCinematicLookInputLocked())
+	{
+		return;
+	}
+	
+	const float AxisValue = Value.Get<float>();
+	if (FMath::IsNearlyZero(AxisValue))
+	{
+		return;
+	}
+		
+	if (ACameraRigActor* CurrentCameraRig = EnsureCameraRig())
+	{
+		CurrentCameraRig->AdjustZoom(-AxisValue);
+	}
+}
+
+void ACPlayerController::OnAttackInput()
+{
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
+	
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+
+	PlayerCharacter->RequestAttack();
+}
+
 void ACPlayerController::OnDodgeInput()
 {
 	if (IsCinematicGameplayInputLocked())
@@ -277,24 +319,6 @@ void ACPlayerController::OnDodgeInput()
 			PlayerMovementComp->ConsumeDodge();
 		}
 	}
-}
-
-void ACPlayerController::OnAttackInput()
-{
-	if (IsCinematicGameplayInputLocked())
-	{
-		return;
-	}
-
-	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
-	
-	if (!PlayerCharacter)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
-		return;
-	}
-
-	PlayerCharacter->RequestAttack();
 }
 
 void ACPlayerController::OnHardTargetInput()
