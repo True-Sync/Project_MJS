@@ -11,6 +11,7 @@ class UInputAction;
 class UInputMappingContext;
 class USkillDataAsset;
 class UTargetingComponent;
+class UUserWidget;
 struct FInputActionValue;
 
 UCLASS()
@@ -116,4 +117,21 @@ private:
 	// 현재 델리게이트를 바인딩해 둔 타겟팅 컴포넌트.
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UTargetingComponent> BoundTargetingComponent;
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "DevConsole")
+	void ToggleDevConsole();
+
+private:
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Debug")
+	TObjectPtr<UInputAction> IA_ToggleDevConsole;
+
+	// 개발 콘솔 UMG 위젯 클래스 (BP에서 할당)
+	UPROPERTY(EditDefaultsOnly, Category = "Debug|UI", meta = (AllowedClasses = "/Script/UMG.UserWidget"))
+	TSubclassOf<UUserWidget> DevConsoleWidgetClass;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UUserWidget> DevConsoleWidget;
+
+	bool bIsDevConsoleOpen = false;
 };
