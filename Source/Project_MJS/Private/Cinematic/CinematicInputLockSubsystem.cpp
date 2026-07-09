@@ -43,6 +43,28 @@ int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerCo
 	return LockHandle;
 }
 
+void UCinematicInputLockSubsystem::ReleaseAllInputLocksForPlayer(APlayerController* PlayerController)
+{
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	TArray<int32> HandlesToRelease;
+	for (const TPair<int32, FCinematicInputLockRecord>& LockPair : ActiveLocks)
+	{
+		if (LockPair.Value.PlayerController.Get() == PlayerController)
+		{
+			HandlesToRelease.Add(LockPair.Key);
+		}
+	}
+
+	for (const int32 LockHandle : HandlesToRelease)
+	{
+		ReleaseInputLock(LockHandle);
+	}
+}
+
 void UCinematicInputLockSubsystem::ReleaseInputLock(int32 LockHandle)
 {
 	FCinematicInputLockRecord LockRecord;

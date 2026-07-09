@@ -14,6 +14,7 @@
 #include "Camera/CameraRigActor.h"
 #include "Level/TeleportZone.h"
 #include "System/Audio/SoundManagerSubsystem.h"
+#include "Kismet/GameplayStatics.h"
 
 #if !UE_BUILD_SHIPPING
 
@@ -351,6 +352,134 @@ void UDevConsoleSubsystem::RegisterCoreCommands()
 			Lines.Add(FString::Printf(TEXT("  BGMState: %d"), static_cast<int32>(SoundMgr->GetBGMState())));
 
 			return FString::Join(Lines, TEXT("\n"));
+		});
+
+	// ===== Phase 1: Test Loop Recovery Commands =====
+
+	// level.restart
+	FDevCommandDispatcher::RegisterCommand(
+		TEXT("level.restart"),
+		TEXT("Level"),
+		TEXT("Restart current level (useful for test loop)."),
+		[](UWorld* World, const TArray<FString>&) -> FString
+		{
+			if (!World) return TEXT("Error: World is missing.");
+
+			const FString LevelName = UGameplayStatics::GetCurrentLevelName(World, true);
+			if (LevelName.IsEmpty())
+			{
+				return TEXT("Error: Could not read current map name.");
+			}
+
+			UGameplayStatics::OpenLevel(World, FName(*LevelName));
+			return FString::Printf(TEXT("Restarting level '%s'..."), *LevelName);
+		});
+
+	// player.reset_state
+	FDevCommandDispatcher::RegisterCommand(
+		TEXT("player.reset_state"),
+		TEXT("Player"),
+		TEXT("Reset player state (HP, input locks, combat states)."),
+		[](UWorld* World, const TArray<FString>&) -> FString
+		{
+			if (!World) return TEXT("Error: World is missing.");
+
+			APlayerController* PC = World->GetFirstPlayerController();
+			if (!PC) return TEXT("No player controller found.");
+
+			ACPlayerCharacter* PlayerChar = Cast<ACPlayerCharacter>(PC->GetPawn());
+			if (!PlayerChar) return TEXT("Player character not found or invalid type.");
+
+			PlayerChar->ResetState();
+			return TEXT("Player state reset: HP max, input unlocked, combat states cleared.");
+		});
+
+	// player.heal_full
+	FDevCommandDispatcher::RegisterCommand(
+		TEXT("player.heal_full"),
+		TEXT("Player"),
+		TEXT("Set player HP to maximum."),
+		[](UWorld* World, const TArray<FString>&) -> FString
+		{
+			if (!World) return TEXT("Error: World is missing.");
+
+			APlayerController* PC = World->GetFirstPlayerController();
+			if (!PC) return TEXT("No player controller found.");
+
+			ACPlayerCharacter* PlayerChar = Cast<ACPlayerCharacter>(PC->GetPawn());
+			if (!PlayerChar) return TEXT("Player character not found or invalid type.");
+
+			PlayerChar->HealFull();
+			return TEXT("Player HP set to maximum.");
+		});
+
+	// player.revive
+	FDevCommandDispatcher::RegisterCommand(
+		TEXT("player.revive"),
+		TEXT("Player"),
+		TEXT("Revive dead player and reset state."),
+		[](UWorld* World, const TArray<FString>&) -> FString
+		{
+			if (!World) return TEXT("Error: World is missing.");
+
+			APlayerController* PC = World->GetFirstPlayerController();
+			if (!PC) return TEXT("No player controller found.");
+
+			ACPlayerCharacter* PlayerChar = Cast<ACPlayerCharacter>(PC->GetPawn());
+			if (!PlayerChar) return TEXT("Player character not found or invalid type.");
+
+			PlayerChar->Revive();
+			return TEXT("Player revived and state reset.");
+		});
+
+	// ai.respawn_all
+	FDevCommandDispatcher::RegisterCommand(
+		TEXT("ai.respawn_all"),
+		TEXT("AI"),
+		TEXT("Respawn all dead enemies in current level."),
+		[](UWorld* World, const TArray<FString>&) -> FString
+		{
+			if (!World) return TEXT("Error: World is missing.");
+
+			int32 RespawnedCount = 0;
+
+			TArray<AActor*> DeadEnemies;
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				AEnemyCharacter* Enemy = *It;
+				if (!Enemy->GetHealthComponent() || !Enemy->GetHealthComponent()->IsAlive())
+				{
+					DeadEnemies.Add(Enemy);
+				}
+			}
+
+			for (AActor* Dead : DeadEnemies)
+			{
+				AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Dead);
+				if (!Enemy) continue;
+
+				const FTransform SpawnTransform = Enemy->GetActorTransform();
+				UClass* EnemyClass = Enemy->GetClass();
+				Enemy->Destroy();
+
+				if (!EnemyClass)
+				{
+					continue;
+				}
+
+				AEnemyCharacter* NewEnemy = World->SpawnActor<AEnemyCharacter>(
+					EnemyClass,
+					SpawnTransform,
+					FActorSpawnParameters());
+
+				if (NewEnemy && NewEnemy->GetHealthComponent())
+				{
+					NewEnemy->GetHealthComponent()->Heal(NewEnemy->GetHealthComponent()->GetMaxHealth());
+					++RespawnedCount;
+				}
+			}
+
+			return FString::Printf(TEXT("ai.respawn_all: Respawned %d enemies."), RespawnedCount);
 		});
 }
 
