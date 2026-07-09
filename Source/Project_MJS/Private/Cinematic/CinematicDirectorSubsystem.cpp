@@ -311,6 +311,8 @@ void UCinematicDirectorSubsystem::BuildActiveContext(const FCinematicPlaybackReq
 	ActiveContext.PlayerController = ActivePlayerController;
 	ActiveContext.SequenceActor = ActiveSequenceActor;
 	ActiveContext.ParticipantScope = Request.ParticipantScope;
+	ActiveContext.AnchorMode = Request.AnchorMode;
+	ActiveContext.RotationSource = Request.RotationSource;
 	ActiveContext.AnchorWorldTransform = AnchorWorldTransform;
 	ActiveContext.bAppliedDynamicTransform = bAppliedDynamicTransform;
 }
@@ -622,4 +624,32 @@ void UCinematicDirectorSubsystem::NotifyParticipantsEnded()
 			ICinematicParticipant::Execute_OnCinematicEnded(Participant, ActiveContext);
 		}
 	}
+}
+
+FString UCinematicDirectorSubsystem::GetCinematicStatusSummary() const
+{
+	TArray<FString> Lines;
+
+	if (!IsCinematicPlaying())
+	{
+		Lines.Add(TEXT("Cinematic: Not Playing"));
+		return FString::Join(Lines, TEXT("\n"));
+	}
+
+	Lines.Add(TEXT("Cinematic: Playing"));
+	Lines.Add(FString::Printf(TEXT("  Sequence: %s"), *GetNameSafe(ActiveContext.Sequence)));
+	Lines.Add(FString::Printf(TEXT("  AnchorMode: %d"), static_cast<int32>(ActiveContext.AnchorMode)));
+	Lines.Add(FString::Printf(TEXT("  RotationSource: %d"), static_cast<int32>(ActiveContext.RotationSource)));
+	Lines.Add(FString::Printf(TEXT("  Participants: %d"), ActiveParticipants.Num()));
+
+	if (IsValid(ActivePlayerController))
+	{
+		Lines.Add(TEXT("  InputLocked: Yes"));
+	}
+	else
+	{
+		Lines.Add(TEXT("  InputLocked: No"));
+	}
+
+	return FString::Join(Lines, TEXT("\n"));
 }

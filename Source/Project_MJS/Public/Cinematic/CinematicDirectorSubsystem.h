@@ -33,6 +33,10 @@ public:
 
 	const FCinematicPlaybackContext& GetActiveContext() const { return ActiveContext; }
 
+	// ===== Debug / DevConsole용 상태 요약 =====
+	UFUNCTION(BlueprintPure, Category = "Cinematic|Debug")
+	FString GetCinematicStatusSummary() const;
+
 private:
 	UFUNCTION()
 	void HandleSequenceFinished();

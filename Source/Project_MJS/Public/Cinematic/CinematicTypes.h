@@ -285,6 +285,14 @@ struct PROJECT_MJS_API FCinematicPlaybackContext
 	UPROPERTY(BlueprintReadOnly, Category = "Cinematic")
 	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
 
+	// 이번 재생에서 사용한 동적 원점 계산 방식.
+	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")
+	ECinematicAnchorMode AnchorMode = ECinematicAnchorMode::AuthoredWorld;
+
+	// 이번 재생에서 사용한 회전 기준.
+	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")
+	ECinematicRotationSource RotationSource = ECinematicRotationSource::AnchorTransform;
+
 	// Director가 계산한 최종 동적 시퀀스 원점. 스킬 판정, 추가 VFX, 디버그 표시가 같은 기준을 재사용할 때 참고.
 	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")
 	FTransform AnchorWorldTransform = FTransform::Identity;

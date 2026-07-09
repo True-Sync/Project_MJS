@@ -51,6 +51,15 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 	float GetCurrentKnockbackForce() const { return CurrentKnockbackForce; }
+
+	// ===== Debug / DevConsole용 상태 조회 =====
+	bool IsAttacking() const { return bIsAttacking; }
+	int32 GetCurrentComboIndex() const { return CurrentComboIndex; }
+	bool CanQueueCombo() const { return bCanQueueCombo; }
+	bool IsComboQueued() const { return bComboQueued; }
+
+	bool IsWeaponAttacking() const { return bIsWeaponAttacking; }
+	bool IsKickAttacking() const { return bIsKickAttacking; }
 	
 	// 노티파이 상태에서 호출할 공격 판정 시작/종료 함수
 	UFUNCTION(BlueprintCallable, Category = "Combat")

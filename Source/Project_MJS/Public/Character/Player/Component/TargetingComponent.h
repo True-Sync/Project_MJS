@@ -37,6 +37,11 @@ public:
 	AActor* GetBestAttackTarget() const;
 	bool HasAnyTargetCandidate() const { return CandidateTargets.Num() > 0; }
 
+	// ===== Debug / DevConsole용 상태 조회 =====
+	int32 GetCandidateTargetsCount() const { return CandidateTargets.Num(); }
+	bool IsRangedHardTargetAiming() const { return bRangedHardTargetAiming; }
+	EHardTargetingMode GetHardTargetingMode() const { return HardTargetingMode; }
+
 	// 타겟팅 HUD에 크로스헤어/마커 표시 상태를 전달하는 델리게이트
 	FOnTargetingDisplayUpdated OnTargetingDisplayUpdated;
 

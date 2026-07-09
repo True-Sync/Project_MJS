@@ -15,6 +15,11 @@
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
 
+#if !UE_BUILD_SHIPPING
+#include "System/Debug/DevConsoleSubsystem.h"
+#include "Blueprint/UserWidget.h"
+#endif // !UE_BUILD_SHIPPING
+
 void ACPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -129,6 +134,13 @@ void ACPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComponent->BindAction(IA_ClearTargeting, ETriggerEvent::Started, this, &ACPlayerController::OnClearHardTargetInput);
 	}
+
+#if !UE_BUILD_SHIPPING
+	if (IA_ToggleDevConsole)
+	{
+		EnhancedInputComponent->BindAction(IA_ToggleDevConsole, ETriggerEvent::Started, this, &ACPlayerController::ToggleDevConsole);
+	}
+#endif // !UE_BUILD_SHIPPING
 }	
 
 FRotator ACPlayerController::GetCameraYawRotation() const
@@ -441,3 +453,53 @@ bool ACPlayerController::IsCinematicGameplayInputLocked() const
 	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
 	return InputLockSubsystem && InputLockSubsystem->IsGameplayInputLocked(this);
 }
+
+#if !UE_BUILD_SHIPPING
+
+void ACPlayerController::ToggleDevConsole()
+{
+	if (!bIsDevConsoleOpen)
+	{
+		if (!DevConsoleWidgetClass)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ToggleDevConsole: DevConsoleWidgetClass is not assigned in BP."));
+			return;
+		}
+
+		DevConsoleWidget = CreateWidget<UUserWidget>(this, DevConsoleWidgetClass);
+		if (DevConsoleWidget)
+		{
+			DevConsoleWidget->AddToViewport(100); // 높은 우선순위 오버레이
+			bIsDevConsoleOpen = true;
+
+			// 마우스 커서 표시
+			SetShowMouseCursor(true);
+			bEnableClickEvents = true;
+			bEnableMouseOverEvents = true;
+
+			// 입력 포커스는 UMG 위젯 내부에서 처리하도록 권장 (EditBox Focus)
+			// 필요 시 여기에서 직접 SetInputModeGameAndUI 사용 가능.
+		}
+		else
+		{
+			UE_LOG(LogTemp, Warning, TEXT("ToggleDevConsole: Failed to create DevConsoleWidget."));
+		}
+	}
+	else
+	{
+		if (DevConsoleWidget)
+		{
+			DevConsoleWidget->RemoveFromParent();
+			DevConsoleWidget = nullptr;
+		}
+
+		bIsDevConsoleOpen = false;
+
+		// 마우스 커서 숨김 및 게임 입력 복구
+		SetShowMouseCursor(false);
+		bEnableClickEvents = false;
+		bEnableMouseOverEvents = false;
+	}
+}
+
+#endif // !UE_BUILD_SHIPPING
