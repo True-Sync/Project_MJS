@@ -17,18 +17,18 @@ class PROJECT_MJS_API ACameraRigActor : public AActor
 public:
 	ACameraRigActor();
 
-	virtual void BeginPlay() override;
-
-	// ===== Component =====
+	// ===== 컴포넌트 =====
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<USpringArmComponent> SpringArm;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraComponent> Camera;
 
+	// 카메라 위치, 회전, 줌 거리 같은 이동 관련 처리를 담당
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraMoveComponent> CameraMoveComp;
 
+	// 카메라 쉐이크, FOV 연출 같은 연출성 처리를 담당
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Camera")
 	TObjectPtr<UCameraDirectingComponent> CameraDirectingComp;
 	

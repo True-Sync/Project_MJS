@@ -6,6 +6,7 @@
 UCameraMoveComponent::UCameraMoveComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
+	CurrentArmLength = GetClampedDefaultArmLength();
 }
 
 void UCameraMoveComponent::BeginPlay()
@@ -19,7 +20,10 @@ void UCameraMoveComponent::BeginPlay()
 		TargetPitch = FMath::Clamp(OwnerRotation.Pitch, MinPitch, MaxPitch);
 	}
 
-	CurrentArmLength = FMath::Clamp(DefaultArmLength, MinArmLength, MaxArmLength);
+	CurrentArmLength = GetClampedDefaultArmLength();
+	MovementArmLengthAutoRestoreElapsedTime = 0.0f;
+	bMovementArmLengthAutoRestorePending = false;
+
 	if (USpringArmComponent* SpringArmComponent = SpringArm.Get())
 	{
 		SpringArmComponent->TargetArmLength = CurrentArmLength;
@@ -50,6 +54,11 @@ void UCameraMoveComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 	const FRotator DesiredRotation = GetCameraRotation();
 	Owner->SetActorRotation(FMath::RInterpTo(Owner->GetActorRotation(), DesiredRotation, DeltaTime, RotationInterpSpeed));
 
+	if (bMovementArmLengthAutoRestorePending && bEnableMovementArmLengthAutoRestore && !bBlockMovementArmLengthAutoRestore)
+	{
+		UpdateMovementArmLengthAutoRestore(DeltaTime);
+	}
+
 	if (USpringArmComponent* SpringArmComponent = SpringArm.Get())
 	{
 		SpringArmComponent->TargetArmLength = FMath::FInterpTo(
@@ -63,6 +72,10 @@ void UCameraMoveComponent::TickComponent(float DeltaTime, ELevelTick TickType, F
 void UCameraMoveComponent::Initialize(USpringArmComponent* InSpringArm)
 {
 	SpringArm = InSpringArm;
+	if (USpringArmComponent* SpringArmComponent = SpringArm.Get())
+	{
+		SpringArmComponent->TargetArmLength = GetClampedDefaultArmLength();
+	}
 }
 
 void UCameraMoveComponent::SetCameraTarget(AActor* NewTarget)
@@ -115,12 +128,18 @@ void UCameraMoveComponent::AdjustZoom(float Delta)
 
 void UCameraMoveComponent::ResetZoom()
 {
-	SetArmLength(DefaultArmLength, false);
+	SetArmLength(GetClampedDefaultArmLength(), false);
 }
 
 void UCameraMoveComponent::SetArmLength(float NewArmLength, bool bApplyImmediately)
 {
 	CurrentArmLength = FMath::Clamp(NewArmLength, MinArmLength, MaxArmLength);
+	MovementArmLengthAutoRestoreElapsedTime = 0.0f;
+	bMovementArmLengthAutoRestorePending = !FMath::IsNearlyEqual(
+		CurrentArmLength,
+		GetClampedDefaultArmLength(),
+		ArmLengthAutoRestoreTolerance);
+
 	if (bApplyImmediately)
 	{
 		if (USpringArmComponent* SpringArmComponent = SpringArm.Get())
@@ -138,6 +157,66 @@ FRotator UCameraMoveComponent::GetCameraRotation() const
 FRotator UCameraMoveComponent::GetCameraYawRotation() const
 {
 	return FRotator(0.0f, TargetYaw, 0.0f);
+}
+
+void UCameraMoveComponent::UpdateMovementArmLengthAutoRestore(float DeltaTime)
+{
+	if (!ShouldAutoRestoreArmLengthWhileMoving())
+	{
+		MovementArmLengthAutoRestoreElapsedTime = 0.0f;
+		if (FMath::IsNearlyEqual(CurrentArmLength, GetClampedDefaultArmLength(), ArmLengthAutoRestoreTolerance))
+		{
+			bMovementArmLengthAutoRestorePending = false;
+		}
+		return;
+	}
+
+	MovementArmLengthAutoRestoreElapsedTime += DeltaTime;
+	if (MovementArmLengthAutoRestoreElapsedTime < MovementArmLengthAutoRestoreDelay)
+	{
+		return;
+	}
+
+	const float RestoreTargetArmLength = GetClampedDefaultArmLength();
+	CurrentArmLength = FMath::FInterpTo(
+		CurrentArmLength,
+		RestoreTargetArmLength,
+		DeltaTime,
+		MovementArmLengthAutoRestoreInterpSpeed);
+
+	if (FMath::IsNearlyEqual(CurrentArmLength, RestoreTargetArmLength, ArmLengthAutoRestoreTolerance))
+	{
+		CurrentArmLength = RestoreTargetArmLength;
+		MovementArmLengthAutoRestoreElapsedTime = 0.0f;
+		bMovementArmLengthAutoRestorePending = false;
+	}
+}
+
+bool UCameraMoveComponent::ShouldAutoRestoreArmLengthWhileMoving() const
+{
+	if (!bMovementArmLengthAutoRestorePending)
+	{
+		return false;
+	}
+
+	const AActor* Target = TargetActor.Get();
+	if (!Target)
+	{
+		return false;
+	}
+
+	const float RestoreTargetArmLength = GetClampedDefaultArmLength();
+	if (FMath::IsNearlyEqual(CurrentArmLength, RestoreTargetArmLength, ArmLengthAutoRestoreTolerance))
+	{
+		return false;
+	}
+
+	return Target->GetVelocity().SizeSquared2D() > FMath::Square(MovementDetectSpeedThreshold);
+}
+
+float UCameraMoveComponent::GetClampedDefaultArmLength() const
+{
+	return FMath::Clamp(DefaultArmLength, MinArmLength, MaxArmLength);
 }
 
 void UCameraMoveComponent::UpdateRotationToFocusTarget()

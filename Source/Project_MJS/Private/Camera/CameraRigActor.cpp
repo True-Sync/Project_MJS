@@ -12,7 +12,6 @@ ACameraRigActor::ACameraRigActor()
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	RootComponent = SpringArm;
 	
-	SpringArm->TargetArmLength = 480.0f;
 	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
 	SpringArm->bUsePawnControlRotation = false;
 	SpringArm->bDoCollisionTest = true;
@@ -32,12 +31,6 @@ ACameraRigActor::ACameraRigActor()
 	
 	CameraDirectingComp = CreateDefaultSubobject<UCameraDirectingComponent>(TEXT("CameraDirecting"));
 	CameraDirectingComp->Initialize(Camera);
-}
-
-void ACameraRigActor::BeginPlay()
-{
-	Super::BeginPlay();
-
 }
 
 void ACameraRigActor::SetCameraTarget(AActor* NewTarget)
