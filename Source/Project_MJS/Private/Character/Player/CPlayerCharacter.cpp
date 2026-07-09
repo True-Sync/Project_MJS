@@ -9,7 +9,9 @@
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicParticipantComponent.h"
 #include "Character/SharedComponent/HealthComponent.h"
+#include "Cinematic/CinematicInputLockSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerController.h"
 
 ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UPlayerMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -107,4 +109,82 @@ bool ACPlayerCharacter::GetLastMoveWorldDirection(FVector& OutDirection) const
 {
 	OutDirection = LastMoveWorldDirection;
 	return bHasMoveInput;
+}
+
+void ACPlayerCharacter::ResetState()
+{
+	if (!GetWorld()) return;
+
+	// HP 최대화
+	HealFull();
+
+	// 이동 상태 초기화
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->MaxWalkSpeed = 600.0f;
+		Movement->Velocity = FVector::ZeroVector;
+	}
+
+	// 공격/회피 상태 초기화 (공격 중/콤보 큐 등)
+	if (UAttackComponent* AttackComp = GetAttackComponent())
+	{
+		AttackComp->SetComboWindowOpen(false);
+	}
+
+	// 타겟팅 초기화
+	if (UTargetingComponent* TargetComp = GetTargetingComponent())
+	{
+		TargetComp->ClearHardTarget();
+	}
+
+	// 입력 잠금 해제 (사망 DisableInput + 시네마틱 lock)
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		EnableInput(PC);
+
+		if (UCinematicInputLockSubsystem* InputLockSub = GetWorld()->GetSubsystem<UCinematicInputLockSubsystem>())
+		{
+			InputLockSub->ReleaseAllInputLocksForPlayer(PC);
+		}
+		else
+		{
+			PC->SetIgnoreMoveInput(false);
+			PC->SetIgnoreLookInput(false);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[DevConsole] player.reset_state: Player state reset."));
+}
+
+void ACPlayerCharacter::HealFull()
+{
+	if (UHealthComponent* HealthComp = GetHealthComponent())
+	{
+		const float MaxHP = HealthComp->GetMaxHealth();
+		const float CurrentHP = HealthComp->GetCurrentHealth();
+		if (CurrentHP < MaxHP)
+		{
+			HealthComp->Heal(MaxHP - CurrentHP);
+		}
+	}
+
+	UE_LOG(LogTemp, Log, TEXT("[DevConsole] player.heal_full: HP set to max."));
+}
+
+void ACPlayerCharacter::Revive()
+{
+	if (!GetWorld()) return;
+
+	UHealthComponent* HealthComp = GetHealthComponent();
+	if (!HealthComp) return;
+
+	// 사망 상태라면 HP 최대화 + 상태 초기화
+	if (!HealthComp->IsAlive())
+	{
+		HealthComp->Heal(HealthComp->GetMaxHealth());
+	}
+
+	ResetState();
+
+	UE_LOG(LogTemp, Log, TEXT("[DevConsole] player.revive: Player revived."));
 }

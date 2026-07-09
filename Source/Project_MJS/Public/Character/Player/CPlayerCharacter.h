@@ -45,6 +45,16 @@ public:
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
+	// ===== Debug Helpers (Phase 1: Test Loop Recovery) =====
+	UFUNCTION(BlueprintCallable, Category = "Debug")
+	void ResetState();
+
+	UFUNCTION(BlueprintCallable, Category = "Debug")
+	void HealFull();
+
+	UFUNCTION(BlueprintCallable, Category = "Debug")
+	void Revive();
+
 private:
 	UPROPERTY(Transient)
 	FVector LastMoveWorldDirection = FVector::ZeroVector;
