@@ -95,3 +95,8 @@ DerivedDataCache/*
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudioEditor.pdb
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudio.pdb
 *.slnx
+.cursor
+compile_commands.json
+.clangd
+.vscode
+.ue5_8cursor
