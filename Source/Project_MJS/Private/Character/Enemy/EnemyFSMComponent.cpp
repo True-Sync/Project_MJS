@@ -62,64 +62,86 @@ void UEnemyFSMComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 void UEnemyFSMComponent::ChangeState(EEnemyState NewState)
 {
 	if (CurrentState == NewState) return;
-	
-	if (NewState == EEnemyState::Approach)
-	{
-		ApproachTime = 0.0f;
-	}
-	
-	if (CurrentState == EEnemyState::Attack_Telegraph || 
-			CurrentState == EEnemyState::Attack_Execution || 
-			CurrentState == EEnemyState::Attack_Recovery)
-	{
-		TokenCooldownTime = 3.0f;
-	}
-	
-	if (NewState == EEnemyState::Idle || 
-			NewState == EEnemyState::Circling || 
-			NewState == EEnemyState::Return || 
-			NewState == EEnemyState::Stagger ||
-			NewState == EEnemyState::Attack_Recovery) 
-	{
-		ReleaseTokenIfHasOne();
-	}
-	
+
 	CurrentState = NewState;
 
 	if (!OwnerCharacter || !OwnerCharacter->GetEnemyData()) return;
-
 	UEnemyActionDataAsset* Data = OwnerCharacter->GetEnemyData();
+
+	// 💡 노티파이로 인해 상태가 바뀔 때 쿨타임 및 토큰 반납 처리 (기존 유지)
+	if (CurrentState == EEnemyState::Attack_Telegraph || 
+		CurrentState == EEnemyState::Attack_Execution || 
+		CurrentState == EEnemyState::Attack_Recovery)
+	{
+		TokenCooldownTime = Data->AttackTokenCooldown; 
+	}
+
+	if (NewState == EEnemyState::Attack_Recovery || 
+		NewState == EEnemyState::Idle || 
+		NewState == EEnemyState::Circling || 
+		NewState == EEnemyState::Return || 
+		NewState == EEnemyState::Stagger) 
+	{
+		ReleaseTokenIfHasOne();
+	}
+
+	if (NewState == EEnemyState::Approach) ApproachTime = 0.0f;
 
 	switch (CurrentState)
 	{
-	case EEnemyState::Idle:
-		if (OwnerAIController) OwnerAIController->StopMovement();
-		break;
-
 	case EEnemyState::Attack_Telegraph:
 		if (OwnerAIController) OwnerAIController->StopMovement();
 			
-		// === 공격 애니메이션(몽타주) 실행 ===
-		switch (Data->AttackType)
+		if (Data->AttackPatterns.Num() > 0)
 		{
-		case EEnemyAttackType::Melee:
-			if (Data->DefaultAttackMontage)
+			float TotalWeight = 0.0f;
+			for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns) TotalWeight += Pattern.ProbabilityWeight;
+
+			float RandomValue = FMath::FRandRange(0.0f, TotalWeight);
+			float AccumulatedWeight = 0.0f;
+			FEnemyAttackPattern SelectedPattern = Data->AttackPatterns[0]; 
+
+			for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns)
 			{
-				UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
-				if (AnimInstance)
+				AccumulatedWeight += Pattern.ProbabilityWeight;
+				if (RandomValue <= AccumulatedWeight)
 				{
-					AnimInstance->Montage_Play(Data->DefaultAttackMontage, Data->AttackPlayRate);
+					SelectedPattern = Pattern; 
+					break;
 				}
 			}
-			break;
 
-		case EEnemyAttackType::Dash:
-			// TODO: 돌진 공격 연출
-			break;
+			switch (SelectedPattern.AttackType)
+			{
+				case EEnemyAttackType::Melee:
+					if (SelectedPattern.AttackMontage)
+					{
+						UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
+						if (AnimInstance)
+						{
+							float PlayDuration = AnimInstance->Montage_Play(SelectedPattern.AttackMontage, SelectedPattern.AttackPlayRate);
+							
+							if (PlayDuration <= 0.0f)
+							{
+								ChangeState(EEnemyState::Idle);
+							}
+						}
+					}
+					else
+					{
+						ChangeState(EEnemyState::Idle);
+					}
+					break;
 
-		case EEnemyAttackType::Ranged:
-			// TODO: 원거리 공격
-			break;
+				case EEnemyAttackType::Dash:
+					break;
+				case EEnemyAttackType::Ranged:
+					break;
+			}
+		}
+		else
+		{
+			ChangeState(EEnemyState::Idle); // 패턴 데이터가 없을 때의 방어
 		}
 		break;
 
@@ -151,12 +173,13 @@ bool UEnemyFSMComponent::CheckLeashDistance()
 void UEnemyFSMComponent::UpdateCircling()
 {
 	if (!TargetPlayer || !OwnerAIController || !OwnerCharacter || !OwnerCharacter->GetEnemyData()) return;
-
+	
+	UEnemyActionDataAsset* Data = OwnerCharacter->GetEnemyData();
 	OwnerAIController->SetFocus(TargetPlayer);
 
-	float DesiredDistance = OwnerCharacter->GetEnemyData()->AttackRange * 1.5f; 
+	float DesiredDistance = Data->AttackRange * Data->CirclingDistanceMultiplier; 
 	float CurrentDistance = FVector::Dist(OwnerCharacter->GetActorLocation(), TargetPlayer->GetActorLocation());
-	
+
 	if (TokenCooldownTime <= 0.0f && CurrentDistance <= DesiredDistance + 100.0f)
 	{
 		UGroupCombatSubsystem* CombatSubsystem = GetWorld()->GetSubsystem<UGroupCombatSubsystem>();
@@ -168,29 +191,13 @@ void UEnemyFSMComponent::UpdateCircling()
 		}
 	}
 
-	// ===== 거리 유지 (Spacing) 로직 =====
-	//if (CurrentDistance < DesiredDistance - 50.0f)
-	//{
-	//	FVector BackwardsDir = (OwnerCharacter->GetActorLocation() - TargetPlayer->GetActorLocation()).GetSafeNormal();
-	//	FVector TargetLoc = TargetPlayer->GetActorLocation() + (BackwardsDir * DesiredDistance);
-	//	OwnerAIController->MoveToLocation(TargetLoc);
-	//}
-	//else if (CurrentDistance > DesiredDistance + 50.0f)
-	//{
-	//	OwnerAIController->MoveToActor(TargetPlayer, DesiredDistance);
-	//}
-	//else
-	//{
-	//	OwnerAIController->StopMovement();
-	//}
-	
+	// 단순 대기 및 거리 유지
 	if (CurrentDistance > DesiredDistance)
 	{
 		OwnerAIController->MoveToActor(TargetPlayer, DesiredDistance);
 	}
 	else
 	{
-		// 적정 거리에 들어오면 그 자리에 멈춰서 쿨타임이 돌 때까지 노려봄
 		OwnerAIController->StopMovement();
 	}
 }
@@ -221,6 +228,8 @@ void UEnemyFSMComponent::UpdateApproach()
 {
 	if (!TargetPlayer || !OwnerAIController || !OwnerCharacter || !OwnerCharacter->GetEnemyData()) return;
 
+	UEnemyActionDataAsset* Data = OwnerCharacter->GetEnemyData();
+	
 	if (CheckLeashDistance()) return;
 
 	UGroupCombatSubsystem* CombatSubsystem = GetWorld()->GetSubsystem<UGroupCombatSubsystem>();
@@ -235,14 +244,14 @@ void UEnemyFSMComponent::UpdateApproach()
 	float AttackRange = OwnerCharacter->GetEnemyData()->AttackRange;
 	float DistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), TargetPlayer->GetActorLocation());
 	
-	if (DistanceToPlayer > AttackRange && ApproachTime > 3.0f)
+	if (DistanceToPlayer > Data->AttackRange && ApproachTime > Data->ApproachTimeout)
 	{
-		TokenCooldownTime = 2.0f;
+		TokenCooldownTime = Data->YieldTokenCooldown; 
 		ChangeState(EEnemyState::Circling);
 		return;
 	}
-	
-	if (DistanceToPlayer <= AttackRange)
+
+	if (DistanceToPlayer <= Data->AttackRange)
 	{
 		OwnerAIController->StopMovement();
 		ChangeState(EEnemyState::Attack_Telegraph);
