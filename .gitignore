@@ -100,3 +100,15 @@ compile_commands.json
 .clangd
 .vscode
 .ue5_8cursor
+
+# UE5_8 Cursor — plugin-generated, do not commit
+.vscode/
+.cursor/
+compile_commands.json
+.clangd
+.clang-format
+.ue5_8cursor/
+.ue58rider/
+.cache
+Plugins/FMODStudio/Binaries/Win64/UnrealEditor-Win64-DebugGame.modules
+*.code-workspace
