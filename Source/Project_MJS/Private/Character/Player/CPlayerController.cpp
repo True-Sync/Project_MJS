@@ -352,23 +352,6 @@ void ACPlayerController::OnDodgeInput()
 	}
 }
 
-void ACPlayerController::OnAttackInput()
-{
-	if (IsCinematicGameplayInputLocked())
-	{
-		return;
-	}
-
-	ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(GetPawn());
-	
-	if (!PlayerCharacter)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("OnAttackInput failed: Pawn is not ACPlayerCharacter."));
-		return;
-	}
-
-	PlayerCharacter->RequestAttack();
-}
 
 
 void ACPlayerController::OnSkill1Input()

@@ -94,3 +94,4 @@ Plugins/**/Intermediate/*
 DerivedDataCache/*
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudioEditor.pdb
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-FMODStudio.pdb
+*.slnx
