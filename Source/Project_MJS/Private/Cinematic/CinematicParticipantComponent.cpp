@@ -13,6 +13,21 @@ UCinematicParticipantComponent::UCinematicParticipantComponent()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+void UCinematicParticipantComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (ActiveLockCount > 0)
+	{
+		ActiveLockCount = 0;
+		ReleaseAnimationLocks();
+		ReleaseTickLocks();
+		ReleaseMovementLock();
+		ReleaseAILocks();
+		ReleaseInputLocks();
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
 void UCinematicParticipantComponent::OnCinematicStarted_Implementation(const FCinematicPlaybackContext& Context)
 {
 	++ActiveLockCount;
@@ -146,7 +161,10 @@ void UCinematicParticipantComponent::ReleaseMovementLock()
 	UCharacterMovementComponent* MovementComponent = OwnerCharacter ? OwnerCharacter->GetCharacterMovement() : nullptr;
 	if (MovementComponent)
 	{
-		MovementComponent->SetMovementMode(SavedMovementMode, SavedCustomMovementMode);
+		if (MovementComponent->MovementMode == MOVE_None)
+		{
+			MovementComponent->SetMovementMode(SavedMovementMode, SavedCustomMovementMode);
+		}
 	}
 
 	bMovementModeSaved = false;
@@ -195,6 +213,7 @@ void UCinematicParticipantComponent::ReleaseTickLocks()
 	if (Owner && bDisableOwnerTick)
 	{
 		Owner->SetActorTickEnabled(bOwnerTickWasEnabled);
+		bOwnerTickWasEnabled = false;
 	}
 
 	for (int32 Index = 0; Index < TickLockedComponents.Num(); ++Index)
@@ -222,6 +241,7 @@ void UCinematicParticipantComponent::ApplyAILocks()
 
 	if (AAIController* OwnerAIController = Cast<AAIController>(GetOwner()))
 	{
+		OwnerAIController->StopMovement();
 		TryPauseBrainComponent(OwnerAIController->GetBrainComponent());
 		return;
 	}
@@ -244,7 +264,7 @@ void UCinematicParticipantComponent::ReleaseAILocks()
 {
 	for (UBrainComponent* BrainComponent : PausedBrainComponents)
 	{
-		if (BrainComponent)
+		if (BrainComponent && BrainComponent->IsPaused())
 		{
 			BrainComponent->ResumeLogic(TEXT("CinematicEnded"));
 		}

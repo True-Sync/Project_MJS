@@ -24,6 +24,7 @@ class PROJECT_MJS_API UCinematicParticipantComponent : public UActorComponent, p
 
 public:
 	UCinematicParticipantComponent();
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	virtual void OnCinematicStarted_Implementation(const FCinematicPlaybackContext& Context) override;
 	virtual void OnCinematicEnded_Implementation(const FCinematicPlaybackContext& Context) override;

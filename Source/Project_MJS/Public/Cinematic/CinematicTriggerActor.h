@@ -94,6 +94,9 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|Network", meta = (AllowPrivateAccess = "true"))
 	ECinematicNetworkPolicy NetworkPolicy = ECinematicNetworkPolicy::LocalOnly;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|PostAction", meta = (AllowPrivateAccess = "true"))
+	FCinematicPostActionConfig PostAction;
+
 	
 	// =========== 런타임 바인딩 파라미터 세팅 ===========
 

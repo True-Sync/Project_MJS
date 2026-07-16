@@ -135,6 +135,49 @@ enum class ECinematicPreset : uint8
 
 
 /* ====================================================================================================
+ 3.8 FCinematicPostActionConfig
+	시네마틱 종료 후 수행할 액션 설정. 처음에는 레벨 로딩만 지원하고, 추후 필요하면 같은 구조체에 옵션 추가.
+*/
+USTRUCT(BlueprintType)
+struct PROJECT_MJS_API FCinematicPostActionConfig
+{
+	GENERATED_BODY()
+
+	// 시퀀스 종료 후 지정된 레벨로 이동할지 결정.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction")
+	bool bLoadLevelOnFinish = false;
+
+	// 이동할 레벨 경로. 예: "/Game/Maps/NextChapter" 또는 맵 에셋 레퍼런스 이름.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (EditCondition = "bLoadLevelOnFinish || bLoadLevelDuringPlayback"))
+	FName LevelName;
+
+	// true면 현재 월드에 등록된 스트리밍 레벨을 비동기로 로드/표시하고, false면 OpenLevel로 맵을 전환.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (EditCondition = "bLoadLevelOnFinish || bLoadLevelDuringPlayback"))
+	bool bAsyncLoad = true;
+
+	// 시퀀스 종료 후 레벨 로딩 전 지연 시간. 컷신 종료 연출과 로딩 시작 사이 여백용.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (ClampMin = "0.0", EditCondition = "bLoadLevelOnFinish"))
+	float DelayBeforeLoad = 0.0f;
+
+	// 시퀀스가 아직 재생 중일 때도 레벨 로딩을 시작할지 결정.
+	// true면 컷신이 끝나기 전에 다음 스트리밍 레벨의 로드/표시를 요청할 수 있음.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback")
+	bool bLoadLevelDuringPlayback = false;
+
+	// 시퀀스 재생 시작 후 몇 초에 레벨 로딩을 트리거할지 결정.
+	// 0.0f면 컷신 시작과 동시에 로딩 시작, 양수면 해당 시간 지점에 로딩 시작.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback",
+		meta = (ClampMin = "0.0", EditCondition = "bLoadLevelDuringPlayback"))
+	float LoadLevelTriggerTime = 0.0f;
+
+	// 레벨 로딩 직전에 현재 시네마틱을 강제로 정지할지 결정.
+	// true면 로딩 전에 컷신을 멈추고 정리, false면 컷신은 그대로 재생하면서 로딩만 병렬로 진행.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback",
+		meta = (EditCondition = "bLoadLevelDuringPlayback"))
+	bool bStopCinematicBeforeLoad = false;
+};
+
+/* ====================================================================================================
 4. FCinematicPlaybackRequest (좀 뭔가 많다.)
 	시네마틱 재생을 시작할 때 요청자에서 DirectorSubsystem으로 전달하는 데이터. 
 	스킬, 궁극기, 일반 컷신 트리거가 모두 이 구조체 하나로 재생을 요청한다.
@@ -249,6 +292,10 @@ struct PROJECT_MJS_API FCinematicPlaybackRequest
 	// 4.23 앵커 디버그 좌표축 크기.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|Debug", meta = (ClampMin = "1.0", EditCondition = "bDrawDebugAnchor"))
 	float DebugDrawScale = 120.0f;
+
+	// 4.24 시네마틱 종료 후 수행할 액션 설정. 현재는 레벨 로딩만 지원하며 추후 확장 가능.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction")
+	FCinematicPostActionConfig PostAction;
 };
 
 /* ====================================================================================================

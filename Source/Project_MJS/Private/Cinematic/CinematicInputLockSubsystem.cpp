@@ -22,6 +22,8 @@ int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerCo
 		return INDEX_NONE;
 	}
 
+	const bool bMoveInputAlreadyLocked = IsMoveInputLocked(PlayerController);
+	const bool bLookInputAlreadyLocked = IsLookInputLocked(PlayerController);
 	const int32 LockHandle = NextLockHandle++;
 
 	FCinematicInputLockRecord& LockRecord = ActiveLocks.Add(LockHandle);
@@ -30,12 +32,12 @@ int32 UCinematicInputLockSubsystem::AcquireInputLock(APlayerController* PlayerCo
 	LockRecord.bLockLookInput = bLockLookInput;
 	LockRecord.bLockGameplayInput = bLockGameplayInput;
 
-	if (bLockMoveInput)
+	if (bLockMoveInput && !bMoveInputAlreadyLocked)
 	{
 		PlayerController->SetIgnoreMoveInput(true);
 	}
 
-	if (bLockLookInput)
+	if (bLockLookInput && !bLookInputAlreadyLocked)
 	{
 		PlayerController->SetIgnoreLookInput(true);
 	}
@@ -79,12 +81,26 @@ void UCinematicInputLockSubsystem::ReleaseInputLock(int32 LockHandle)
 		return;
 	}
 
-	if (LockRecord.bLockMoveInput)
+	// 다른 잠금이 같은 입력을 사용하고 있는지 확인 후 해제
+	bool bAnyMoveLocked = false;
+	bool bAnyLookLocked = false;
+
+	for (const TPair<int32, FCinematicInputLockRecord>& LockPair : ActiveLocks)
+	{
+		const FCinematicInputLockRecord& Other = LockPair.Value;
+		if (Other.PlayerController.Get() == PlayerController)
+		{
+			if (Other.bLockMoveInput) bAnyMoveLocked = true;
+			if (Other.bLockLookInput) bAnyLookLocked = true;
+		}
+	}
+
+	if (LockRecord.bLockMoveInput && !bAnyMoveLocked)
 	{
 		PlayerController->SetIgnoreMoveInput(false);
 	}
 
-	if (LockRecord.bLockLookInput)
+	if (LockRecord.bLockLookInput && !bAnyLookLocked)
 	{
 		PlayerController->SetIgnoreLookInput(false);
 	}

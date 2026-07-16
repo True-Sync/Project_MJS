@@ -63,19 +63,24 @@ bool ACinematicTriggerActor::ActivateCinematic(AActor* TargetActor)
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = BlendOutTime;
 	Request.NetworkPolicy = NetworkPolicy;
+	Request.PostAction = PostAction;
 
 	// 덮어쓰기 허용 시 기존 컷신 중단 명시 (의도적 충돌 방지)
 	Request.bStopPreviousCinematic = bAlreadyPlaying && bAllowOverrideWhilePlaying;
 
-	if (bBindTriggeringActor && !TriggeringActorBindingTag.IsNone())
+	Request.BindingOverrides = BindingOverrides;
+
+	if (bBindTriggeringActor && !TriggeringActorBindingTag.IsNone() &&
+		!Request.BindingOverrides.ContainsByPredicate([this](const FCinematicBindingOverride& BindingOverride)
+		{
+			return BindingOverride.BindingTag == TriggeringActorBindingTag;
+		}))
 	{
 		FCinematicBindingOverride TriggeringActorBindingOverride;
 		TriggeringActorBindingOverride.BindingTag = TriggeringActorBindingTag;
 		TriggeringActorBindingOverride.Actors.Add(TargetActor);
 		Request.BindingOverrides.Add(TriggeringActorBindingOverride);
 	}
-
-	Request.BindingOverrides.Append(BindingOverrides);
 	Request.AnchorMode = AnchorMode;
 	Request.RotationSource = RotationSource;
 	Request.AnchorActor = bUseTriggerActorAsAnchor ? this : nullptr;

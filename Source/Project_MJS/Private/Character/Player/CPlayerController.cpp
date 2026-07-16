@@ -252,6 +252,11 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnJumpInput()
 {
+	if (IsCinematicMoveInputLocked() || IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
 	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
 	if (!PlayerCharacter)
 	{
@@ -429,6 +434,11 @@ void ACPlayerController::OnRangedHardTargetCompleted()
 
 void ACPlayerController::OnRangedHardTargetCanceled()
 {
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
 	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
 	{
 		TargetingComponent->CancelRangedHardTargetAim();
@@ -437,6 +447,11 @@ void ACPlayerController::OnRangedHardTargetCanceled()
 
 void ACPlayerController::OnClearHardTargetInput()
 {
+	if (IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
 	if (UTargetingComponent* TargetingComponent = GetPlayerTargetingComponent())
 	{
 		TargetingComponent->ClearHardTarget();
