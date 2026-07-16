@@ -112,3 +112,4 @@ compile_commands.json
 .cache
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-Win64-DebugGame.modules
 *.code-workspace
+.agent

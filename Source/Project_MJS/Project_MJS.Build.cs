@@ -22,7 +22,8 @@ public class Project_MJS : ModuleRules
 			"CinematicCamera",
 			"Niagara",
 			"AIModule",
-			"UMG"
+			"UMG",
+			"GameplayTags"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor" });

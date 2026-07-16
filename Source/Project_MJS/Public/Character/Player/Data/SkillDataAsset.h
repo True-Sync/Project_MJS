@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Cinematic/CinematicTypes.h"
+#include "Components/StaminaCostData.h"
 #include "Engine/DataAsset.h"
 #include "SkillDataAsset.generated.h"
 
@@ -38,6 +39,11 @@ public:
 	// 스킬 발동 시 재생할 애니메이션 몽타주.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Animation")
 	TObjectPtr<UAnimMontage> MontageToPlay = nullptr;
+
+	// 이 스킬이 소모하는 스태미나 비용 (UStaminaComponent와 연동)
+	// 스태미나 관련 규칙은 StaminaComponent + FStaminaCostData에서 통일 관리.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Resource")
+	FStaminaCostData StaminaCost;
 
 	// 스킬 발동 시 재생할 Level Sequence.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Cinematic", meta = (EditCondition = "bUseCinematic"))
