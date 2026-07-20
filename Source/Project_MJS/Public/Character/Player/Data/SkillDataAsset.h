@@ -19,22 +19,10 @@ enum class ESkillType : uint8
 	Ultimate UMETA(DisplayName = "Ultimate"),
 };
 
-UCLASS(BlueprintType, Blueprintable)
-class PROJECT_MJS_API USkillDataAsset : public UPrimaryDataAsset
+USTRUCT(BlueprintType)
+struct PROJECT_MJS_API FSkillExecutionSettings
 {
 	GENERATED_BODY()
-	
-public:
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Info")
-	FText SkillName;
-
-	// 연출 타입. 일반 스킬과 궁극기의 시네마틱 기본 동작을 나누는 데 사용한다.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Info")
-	ESkillType Type = ESkillType::Normal;
-
-	// Level Sequence 기반 시네마틱을 사용할지 여부.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Cinematic")
-	bool bUseCinematic = true;
 
 	// 스킬 발동 시 재생할 애니메이션 몽타주.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Animation")
@@ -44,6 +32,16 @@ public:
 	// 스태미나 관련 규칙은 StaminaComponent + FStaminaCostData에서 통일 관리.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Resource")
 	FStaminaCostData StaminaCost;
+};
+
+USTRUCT(BlueprintType)
+struct PROJECT_MJS_API FSkillCinematicSettings
+{
+	GENERATED_BODY()
+
+	// Level Sequence 기반 시네마틱을 사용할지 여부.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Cinematic")
+	bool bUseCinematic = true;
 
 	// 스킬 발동 시 재생할 Level Sequence.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Cinematic", meta = (EditCondition = "bUseCinematic"))
@@ -103,5 +101,83 @@ public:
 
 	// true면 시퀀스 에셋의 기존 바인딩을 유지하고 대상 바인딩을 추가한다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Cinematic|Binding", meta = (EditCondition = "bUseCinematic && bBindBestTarget"))
+	bool bAllowTargetBindingFromAsset = false;
+};
+
+UCLASS(BlueprintType, Blueprintable)
+class PROJECT_MJS_API USkillDataAsset : public UPrimaryDataAsset
+{
+	GENERATED_BODY()
+
+public:
+	virtual void PostLoad() override;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Info")
+	FText SkillName;
+
+	// 연출 타입. 일반 스킬과 궁극기의 시네마틱 기본 동작을 나누는 데 사용한다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Info")
+	ESkillType Type = ESkillType::Normal;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Settings")
+	FSkillExecutionSettings ExecutionSettings;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Skill|Settings")
+	FSkillCinematicSettings CinematicSettings;
+
+private:
+	// 구조체 분리 이전에 저장된 DataAsset 값을 한 번 마이그레이션하기 위한 레거시 필드.
+	UPROPERTY(meta = (DeprecatedProperty, DeprecationMessage = "Use ExecutionSettings.MontageToPlay instead."))
+	TObjectPtr<UAnimMontage> MontageToPlay = nullptr;
+
+	UPROPERTY(meta = (DeprecatedProperty, DeprecationMessage = "Use ExecutionSettings.StaminaCost instead."))
+	FStaminaCostData StaminaCost;
+
+	UPROPERTY(meta = (DeprecatedProperty, DeprecationMessage = "Use CinematicSettings.bUseCinematic instead."))
+	bool bUseCinematic = true;
+
+	UPROPERTY(meta = (DeprecatedProperty, DeprecationMessage = "Use CinematicSettings.CinematicSequence instead."))
+	TObjectPtr<ULevelSequence> CinematicSequence = nullptr;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	float CinematicBlendOutTime = 0.15f;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	bool bRestoreViewTarget = true;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	bool bStopPreviousCinematic = false;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	bool bUseUltimateCinematicDefaults = true;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	ECinematicAnchorMode AnchorMode = ECinematicAnchorMode::InstigatorToSubject;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	ECinematicRotationSource RotationSource = ECinematicRotationSource::AnchorTransform;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	FName AnchorSocketName = NAME_None;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	FName TargetSocketName = NAME_None;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	FTransform RelativeTransform = FTransform::Identity;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	bool bUseYawOnly = true;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	bool bBindBestTarget = true;
+
+	UPROPERTY(meta = (DeprecatedProperty))
+	FName TargetBindingTag = TEXT("Target");
+
+	UPROPERTY(meta = (DeprecatedProperty))
 	bool bAllowTargetBindingFromAsset = false;
 };

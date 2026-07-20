@@ -61,10 +61,13 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 		return false;
 	}
 
-	if (!StaminaComponent->CanConsumeStamina(SkillData->StaminaCost))
+	const FSkillExecutionSettings& ExecutionSettings = SkillData->ExecutionSettings;
+	const FSkillCinematicSettings& CinematicSettings = SkillData->CinematicSettings;
+
+	if (!StaminaComponent->CanConsumeStamina(ExecutionSettings.StaminaCost))
 	{
 		UE_LOG(LogTemp, Log, TEXT("Skill activation rejected: insufficient stamina. Skill=%s Current=%.1f Cost=%.1f"),
-			*GetNameSafe(SkillData), StaminaComponent->GetCurrentStamina(), SkillData->StaminaCost.StaminaCost);
+			*GetNameSafe(SkillData), StaminaComponent->GetCurrentStamina(), ExecutionSettings.StaminaCost.StaminaCost);
 		return false;
 	}
 	
@@ -74,7 +77,7 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 	StopActiveMontages();
 
 	bool bPlayedMontage = false;
-	if (SkillData->MontageToPlay)
+	if (ExecutionSettings.MontageToPlay)
 	{
 		AActor* Owner = GetOwner();
 		if (ACharacter* Char = Cast<ACharacter>(Owner))
@@ -82,14 +85,14 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 			UAnimInstance* AnimInstance = Char->GetMesh() ? Char->GetMesh()->GetAnimInstance() : nullptr;
 			if (IsValid(AnimInstance))
 			{
-				const float Duration = AnimInstance->Montage_Play(SkillData->MontageToPlay, 1.0f);
+				const float Duration = AnimInstance->Montage_Play(ExecutionSettings.MontageToPlay, 1.0f);
 				if (Duration > 0.0f)
 				{
 					FOnMontageEnded MontageEndedDelegate;
 					MontageEndedDelegate.BindUObject(this, &USkillComponent::OnSkillMontageEnded);
-					AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, SkillData->MontageToPlay);
+					AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, ExecutionSettings.MontageToPlay);
 
-					ActiveSkillMontage = SkillData->MontageToPlay;
+					ActiveSkillMontage = ExecutionSettings.MontageToPlay;
 					SkillState = ESkillActivationState::Active;
 					bPlayedMontage = true;
 				}
@@ -98,7 +101,7 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 	}
 	
 	bool bPlayedCinematic = false;
-	if (SkillData->bUseCinematic && SkillData->CinematicSequence)
+	if (CinematicSettings.bUseCinematic && CinematicSettings.CinematicSequence)
 	{
 		PlaySkillCinematic(SkillData);
 		bPlayedCinematic = IsSkillCinematicPlaying();
@@ -112,7 +115,7 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 		return false;
 	}
 
-	if (!StaminaComponent->ConsumeStamina(SkillData->StaminaCost))
+	if (!StaminaComponent->ConsumeStamina(ExecutionSettings.StaminaCost))
 	{
 		StopActiveMontages();
 		FinishSkill();
@@ -144,7 +147,7 @@ bool USkillComponent::IsSkillCinematicPlaying() const
 
 void USkillComponent::PlaySkillCinematic(USkillDataAsset* SkillData)
 {
-	if (!SkillData || !SkillData->CinematicSequence || !CinematicActionComp)
+	if (!SkillData || !SkillData->CinematicSettings.CinematicSequence || !CinematicActionComp)
 	{
 		return;
 	}
@@ -167,32 +170,33 @@ FCinematicPlaybackRequest USkillComponent::BuildSkillCinematicRequest(const USki
 	AActor* Owner = GetOwner();
 	AActor* BestTarget = ResolveBestSkillTarget(SkillData);
 	AActor* SubjectActor = BestTarget ? BestTarget : Owner;
+	const FSkillCinematicSettings& CinematicSettings = SkillData->CinematicSettings;
 
-	Request.Sequence = SkillData->CinematicSequence;
+	Request.Sequence = CinematicSettings.CinematicSequence;
 	Request.InstigatorActor = Owner;
 	Request.SubjectActor = SubjectActor;
 	Request.AnchorActor = Owner;
-	Request.bRestoreViewTarget = SkillData->bRestoreViewTarget;
-	Request.BlendOutTime = SkillData->CinematicBlendOutTime;
-	Request.ParticipantScope = SkillData->ParticipantScope;
-	Request.bStopPreviousCinematic = SkillData->bStopPreviousCinematic;
-	Request.AnchorMode = SkillData->AnchorMode;
-	Request.RotationSource = SkillData->RotationSource;
-	Request.AnchorSocketName = SkillData->AnchorSocketName;
-	Request.TargetSocketName = SkillData->TargetSocketName;
-	Request.RelativeTransform = SkillData->RelativeTransform;
-	Request.bUseYawOnly = SkillData->bUseYawOnly;
+	Request.bRestoreViewTarget = CinematicSettings.bRestoreViewTarget;
+	Request.BlendOutTime = CinematicSettings.CinematicBlendOutTime;
+	Request.ParticipantScope = CinematicSettings.ParticipantScope;
+	Request.bStopPreviousCinematic = CinematicSettings.bStopPreviousCinematic;
+	Request.AnchorMode = CinematicSettings.AnchorMode;
+	Request.RotationSource = CinematicSettings.RotationSource;
+	Request.AnchorSocketName = CinematicSettings.AnchorSocketName;
+	Request.TargetSocketName = CinematicSettings.TargetSocketName;
+	Request.RelativeTransform = CinematicSettings.RelativeTransform;
+	Request.bUseYawOnly = CinematicSettings.bUseYawOnly;
 
-	if (SkillData->Type == ESkillType::Ultimate && SkillData->bUseUltimateCinematicDefaults)
+	if (SkillData->Type == ESkillType::Ultimate && CinematicSettings.bUseUltimateCinematicDefaults)
 	{
 		Request.ParticipantScope = ECinematicParticipantScope::AllInWorld;
 		Request.bStopPreviousCinematic = true;
 		Request.AnchorMode = BestTarget ? ECinematicAnchorMode::InstigatorToSubject : ECinematicAnchorMode::SubjectActor;
 	}
 
-	if (SkillData->bBindBestTarget && BestTarget && !SkillData->TargetBindingTag.IsNone())
+	if (CinematicSettings.bBindBestTarget && BestTarget && !CinematicSettings.TargetBindingTag.IsNone())
 	{
-		AddActorBinding(Request, SkillData->TargetBindingTag, BestTarget, SkillData->bAllowTargetBindingFromAsset);
+		AddActorBinding(Request, CinematicSettings.TargetBindingTag, BestTarget, CinematicSettings.bAllowTargetBindingFromAsset);
 		Request.AdditionalParticipants.AddUnique(BestTarget);
 	}
 
@@ -201,7 +205,7 @@ FCinematicPlaybackRequest USkillComponent::BuildSkillCinematicRequest(const USki
 
 AActor* USkillComponent::ResolveBestSkillTarget(const USkillDataAsset* SkillData) const
 {
-	if (!SkillData || !SkillData->bBindBestTarget)
+	if (!SkillData || !SkillData->CinematicSettings.bBindBestTarget)
 	{
 		return nullptr;
 	}
