@@ -2,6 +2,7 @@
 
 #include "Animation/AnimInstance.h"
 #include "Character/Player/Component/TargetingComponent.h"
+#include "Character/SharedComponent/StaminaComponent.h"
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicTypes.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -20,6 +21,7 @@ void USkillComponent::BeginPlay()
 	if (AActor* Owner = GetOwner())
 	{
 		CinematicActionComp = Owner->FindComponentByClass<UCinematicActionComponent>();
+		StaminaComponent = Owner->FindComponentByClass<UStaminaComponent>();
 	}
 }
 
@@ -46,10 +48,23 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 		UE_LOG(LogTemp, Error, TEXT("SkillComp : SkillData나 Getworld, CinematicActionComp가 할당되지 않았습니다."));
 		return false;
 	}
+
+	if (!IsValid(StaminaComponent))
+	{
+		UE_LOG(LogTemp, Error, TEXT("Skill activation failed: StaminaComponent is missing. Owner=%s"), *GetNameSafe(GetOwner()));
+		return false;
+	}
 	
 	if (SkillState != ESkillActivationState::Idle || IsSkillCinematicPlaying())
 	{
 		UE_LOG(LogTemp, Warning, TEXT("SkillComp : 이미 스킬이 플레이 중이거나, ESkillActivationState::Idle 상태가 아닙니다."));
+		return false;
+	}
+
+	if (!StaminaComponent->CanConsumeStamina(SkillData->StaminaCost))
+	{
+		UE_LOG(LogTemp, Log, TEXT("Skill activation rejected: insufficient stamina. Skill=%s Current=%.1f Cost=%.1f"),
+			*GetNameSafe(SkillData), StaminaComponent->GetCurrentStamina(), SkillData->StaminaCost.StaminaCost);
 		return false;
 	}
 	
@@ -94,6 +109,13 @@ bool USkillComponent::ActivateSkill(USkillDataAsset* SkillData)
 		FinishSkill();
 		UE_LOG(LogTemp, Warning, TEXT("SkillComp : 플레이 할 몽타주나 시네마틱이 할당되지 않았습니다."));
 
+		return false;
+	}
+
+	if (!StaminaComponent->ConsumeStamina(SkillData->StaminaCost))
+	{
+		StopActiveMontages();
+		FinishSkill();
 		return false;
 	}
 	

@@ -5,12 +5,14 @@
 #include "Camera/CameraDirectingComponent.h"
 #include "Camera/CameraDirectingComponentFinder.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Character/SharedComponent/StaminaComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 
 UDodgeComponent::UDodgeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
+	DodgeStaminaCost.StaminaCost = 20.0f;
 }
 
 bool UDodgeComponent::RequestDodge()
@@ -25,6 +27,20 @@ bool UDodgeComponent::RequestDodge()
 	if (!OwnerCharacter)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Owner is not ACharacter."));
+		return false;
+	}
+
+	UStaminaComponent* StaminaComponent = OwnerCharacter->FindComponentByClass<UStaminaComponent>();
+	if (!IsValid(StaminaComponent))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: StaminaComponent is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
+		return false;
+	}
+
+	if (!StaminaComponent->CanConsumeStamina(DodgeStaminaCost))
+	{
+		UE_LOG(LogTemp, Log, TEXT("RequestDodge rejected: insufficient stamina. Current=%.1f Cost=%.1f"),
+			StaminaComponent->GetCurrentStamina(), DodgeStaminaCost.StaminaCost);
 		return false;
 	}
 
@@ -55,6 +71,12 @@ bool UDodgeComponent::RequestDodge()
 	if (Duration <= 0.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(MontageToPlay));
+		return false;
+	}
+
+	if (!StaminaComponent->ConsumeStamina(DodgeStaminaCost))
+	{
+		AnimInstance->Montage_Stop(0.0f, MontageToPlay);
 		return false;
 	}
 

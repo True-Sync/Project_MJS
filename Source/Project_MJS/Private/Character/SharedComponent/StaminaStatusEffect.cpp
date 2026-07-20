@@ -1,5 +1,5 @@
 // StaminaStatusEffect: 상태 효과 시스템 기본 구현
-#include "Components/StaminaStatusEffect.h"
+#include "Character/SharedComponent/StaminaStatusEffect.h"
 
 UStaminaStatusEffect::UStaminaStatusEffect()
 {

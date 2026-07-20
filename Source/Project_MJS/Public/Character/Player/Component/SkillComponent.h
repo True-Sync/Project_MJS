@@ -9,6 +9,7 @@ class UAnimInstance;
 class UAnimMontage;
 class UCinematicActionComponent;
 class USkillDataAsset;
+class UStaminaComponent;
 
 UENUM(BlueprintType)
 enum class ESkillActivationState : uint8
@@ -62,6 +63,9 @@ private:
 
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Skill", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicActionComponent> CinematicActionComp;
+
+	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Skill", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UStaminaComponent> StaminaComponent;
 
 	// 현재 발동 중인 스킬 데이터. 중복 발동 방지와 이벤트 처리에 사용한다.
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = "Skill", meta = (AllowPrivateAccess = "true"))

@@ -1,6 +1,9 @@
 // StaminaComponent: improved delegate usage, depletion guard, and ConfigureStaminaBehavior signature (v2).
 #include "Character/SharedComponent/StaminaComponent.h"
-#include "Components/StaminaCostData.h"
+
+#include "TimerManager.h"
+#include "Character/SharedData/StaminaCostData.h"
+#include "Engine/World.h"
 
 #include "GameFramework/Character.h"
 #include "GameFramework/Controller.h"
@@ -47,18 +50,12 @@ float UStaminaComponent::GetStaminaPercent() const
 
 bool UStaminaComponent::ConsumeStamina(const FStaminaCostData& CostData)
 {
-	if (!CostData.bCanConsume || CurrentStamina <= 0.0f)
+	if (!CanConsumeStamina(CostData))
 	{
 		return false;
 	}
 
-	float Amount = CostData.StaminaCost;
-	
-	// 스태미나가 부족하면 소모하지 않고 실패 반환
-	if (CurrentStamina < Amount)
-	{
-		return false;
-	}
+	const float Amount = CostData.StaminaCost;
 
 	// 1. 스태미나 소모
 	ApplyStaminaDelta(-Amount);
@@ -66,14 +63,8 @@ bool UStaminaComponent::ConsumeStamina(const FStaminaCostData& CostData)
 	// 2. 소모 중 회복량 처리 (점프, 달리기 등 지속적 소모 시)
 	if (CostData.StaminaRegenRate > 0.0f)
 	{
-		const float OldStamina = CurrentStamina;
 		const float RegenAmount = CostData.StaminaRegenRate * 0.1f; // 0.1 초 기준
-		CurrentStamina = FMath::Min(CurrentStamina + RegenAmount, MaxStamina);
-
-		if (!FMath::IsNearlyEqual(OldStamina, CurrentStamina))
-		{
-			OnStaminaChanged.Broadcast(OldStamina, CurrentStamina);
-		}
+		ApplyStaminaDelta(RegenAmount);
 	}
 
 	// 3. 최대 스태미나 증가 효과 적용 (일시적 버프)
@@ -119,6 +110,16 @@ bool UStaminaComponent::ConsumeStamina(const FStaminaCostData& CostData)
 	return true;
 }
 
+bool UStaminaComponent::CanConsumeStamina(const FStaminaCostData& CostData) const
+{
+	if (!CostData.bCanConsume || CostData.StaminaCost < 0.0f)
+	{
+		return false;
+	}
+
+	return CurrentStamina >= CostData.StaminaCost;
+}
+
 bool UStaminaComponent::ConsumeStamina(float Amount)
 {
 	// 레거시 호환성 - 기본값 사용
@@ -135,14 +136,8 @@ void UStaminaComponent::RegenerateStamina(float DeltaTime)
 		return;
 	}
 
-	const float OldStamina = CurrentStamina;
 	const float RegenAmount = StaminaRegenRate * DeltaTime;
-	CurrentStamina = FMath::Min(CurrentStamina + RegenAmount, MaxStamina);
-
-	if (!FMath::IsNearlyEqual(OldStamina, CurrentStamina))
-	{
-		OnStaminaChanged.Broadcast(OldStamina, CurrentStamina);
-	}
+	ApplyStaminaDelta(RegenAmount);
 }
 
 void UStaminaComponent::ApplyStaminaDelta(float Delta)
@@ -156,7 +151,11 @@ void UStaminaComponent::ApplyStaminaDelta(float Delta)
 	}
 
 	// 스태미나가 고갈되고 아직 처리되지 않았다면 한 번만 처리
-	if (CurrentStamina <= 0.0f && !bIsDepleted)
+	if (CurrentStamina > 0.0f)
+	{
+		bIsDepleted = false;
+	}
+	else if (!bIsDepleted)
 	{
 		HandleStaminaDepletion();
 	}

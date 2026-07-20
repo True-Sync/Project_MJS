@@ -2,7 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Cinematic/CinematicTypes.h"
-#include "Components/StaminaCostData.h"
+#include "Character/SharedData/StaminaCostData.h"
 #include "Engine/DataAsset.h"
 #include "SkillDataAsset.generated.h"
 

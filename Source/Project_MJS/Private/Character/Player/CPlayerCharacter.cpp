@@ -9,10 +9,12 @@
 #include "Cinematic/CinematicActionComponent.h"
 #include "Cinematic/CinematicParticipantComponent.h"
 #include "Character/SharedComponent/HealthComponent.h"
+#include "Character/SharedComponent/StaminaComponent.h"
 #include "Cinematic/CinematicInputLockSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/DamageEvents.h"
+#include "Engine/World.h"
 
 ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UPlayerMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -27,6 +29,7 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
+	StaminaComponent = CreateDefaultSubobject<UStaminaComponent>(TEXT("StaminaComponent"));
 	
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -47,7 +50,15 @@ void ACPlayerCharacter::BeginPlay()
 
 float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
 {
-	if (DodgeComponent)
+	
+	if (DamageAmount <= 0.0f)
+		return 0.0f;
+	
+	if (!IsValid(HealthComponent) || !HealthComponent->IsAlive())
+		return 0.0f;
+
+	//회피 계산 이후 피해 판정.
+	if (IsValid(DodgeComponent))
 	{
 		if (DodgeComponent->TryConsumeJustDodge(DamageCauser))
 		{
@@ -59,8 +70,19 @@ float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& Dama
 			return 0.0f;
 		}
 	}
+	
+	// 실제로 적중한 공격만 표준 데미지 이벤트를 발생
+	const float ActualDamage =
+		Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	return Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	if (ActualDamage <= 0.0f)
+		return 0.0f;
+
+	if (!HealthComponent->ReceiveDamage(ActualDamage,EventInstigator,DamageCauser))
+		return 0.0f;
+
+	
+	return ActualDamage;
 }
 
 void ACPlayerCharacter::Move(const FVector2D& MoveInput)

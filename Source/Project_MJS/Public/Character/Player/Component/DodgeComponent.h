@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimMontage.h"
+#include "Character/SharedData/StaminaCostData.h"
 #include "Components/ActorComponent.h"
 #include "System/Combat/CombatTimeDilationSubsystem.h"
 #include "DodgeComponent.generated.h"
@@ -41,6 +42,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
 	TObjectPtr<UAnimMontage> JustDodgeMontage;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Dodge|Resource")
+	FStaminaCostData DodgeStaminaCost;
 
 	// ===== 저스트 회피 =====
 	// 저스트 회피 사용 여부 (꺼도 일반 회피 무적은 유지됨)
