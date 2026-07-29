@@ -5,7 +5,6 @@
 #include "Character/Player/Component/TargetingTypes.h"
 #include "TargetingComponent.generated.h"
 
-class AEnemyCharacter;
 class APlayerController;
 class USphereComponent;
 

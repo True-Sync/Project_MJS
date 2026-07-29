@@ -1,7 +1,6 @@
 #include "UI/MainMenuWidget.h"
 
 #include "Components/Button.h"
-#include "GamePlay/Controller/MainMenuPlayerController.h"
 
 void UMainMenuWidget::NativeOnInitialized()
 {
@@ -11,44 +10,41 @@ void UMainMenuWidget::NativeOnInitialized()
 	{
 		Btn_Start->OnClicked.AddDynamic(this, &UMainMenuWidget::HandleStartClicked);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget is missing Btn_Start."));
+	}
 
 	if (Btn_Setting)
 	{
 		Btn_Setting->OnClicked.AddDynamic(this, &UMainMenuWidget::HandleSettingClicked);
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget is missing Btn_Setting."));
 	}
 
 	if (Btn_Exit)
 	{
 		Btn_Exit->OnClicked.AddDynamic(this, &UMainMenuWidget::HandleExitClicked);
 	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget is missing Btn_Exit."));
+	}
 }
 
 void UMainMenuWidget::HandleStartClicked()
 {
-	AMainMenuPlayerController* MainMenuPlayerController = Cast<AMainMenuPlayerController>(GetOwningPlayer());
-	if (!MainMenuPlayerController)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget could not find MainMenuPlayerController."));
-		return;
-	}
-
-	RemoveFromParent();
-	MainMenuPlayerController->RequestStartGame(StartLevelName);
+	OnStartRequested.Broadcast(StartLevelName);
 }
 
 void UMainMenuWidget::HandleSettingClicked()
 {
-	UE_LOG(LogTemp, Log, TEXT("Setting button clicked. Settings widget is not implemented yet."));
+	OnSettingRequested.Broadcast();
 }
 
 void UMainMenuWidget::HandleExitClicked()
 {
-	AMainMenuPlayerController* MainMenuPlayerController = Cast<AMainMenuPlayerController>(GetOwningPlayer());
-	if (!MainMenuPlayerController)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget could not find MainMenuPlayerController."));
-		return;
-	}
-
-	MainMenuPlayerController->RequestQuitGame();
+	OnExitRequested.Broadcast();
 }

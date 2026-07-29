@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Character/Shared/TargetableInterface.h"
 #include "GameFramework/Character.h"
 #include "EnemyCharacter.generated.h"
 
@@ -9,7 +10,7 @@ class UHealthComponent;
 class UEnemyFSMComponent;
 class UEnemyActionDataAsset;
 UCLASS()
-class PROJECT_MJS_API AEnemyCharacter : public ACharacter
+class PROJECT_MJS_API AEnemyCharacter : public ACharacter, public ITargetableInterface
 {
 	GENERATED_BODY()
 
@@ -17,7 +18,7 @@ public:
 	AEnemyCharacter();
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
-	FVector GetTargetPointLocation() const;
+	virtual FVector GetTargetPointLocation_Implementation() const override;
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 
 	// ===== FSM (AI 상태 제어기) =====

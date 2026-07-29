@@ -4,6 +4,8 @@
 #include "GameFramework/PlayerController.h"
 #include "MainMenuPlayerController.generated.h"
 
+class UUserWidget;
+
 UCLASS()
 class PROJECT_MJS_API AMainMenuPlayerController : public APlayerController
 {
@@ -13,9 +15,9 @@ protected:
 	virtual void BeginPlay() override;
 	
 public:
-	UFUNCTION(BlueprintCallable, Category = "Main Menu")
+	void ConfigureMenuInput(UUserWidget* FocusWidget);
+
 	void RequestStartGame(FName LevelName);
 
-	UFUNCTION(BlueprintCallable, Category = "Main Menu")
 	void RequestQuitGame();
 };

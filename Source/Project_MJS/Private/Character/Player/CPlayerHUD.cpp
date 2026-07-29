@@ -1,126 +1,136 @@
 #include "Character/Player/CPlayerHUD.h"
 
 #include "Blueprint/UserWidget.h"
-#include "Blueprint/WidgetLayoutLibrary.h"
+#include "Character/Player/CPlayerController.h"
+#include "UI/GamePlayWidget.h"
+#include "UI/PauseMenuWidget.h"
+
+void ACPlayerHUD::BeginPlay()
+{
+	Super::BeginPlay();
+
+	EnsureGamePlayWidget();
+	ValidateGamePlayWidgetConfiguration();
+}
 
 void ACPlayerHUD::OnTargetingHUDUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers)
 {
-	if (UUserWidget* Widget = EnsureCrosshairWidget())
+	if (UGamePlayWidget* Widget = EnsureGamePlayWidget())
 	{
-		Widget->SetVisibility(bShowCrosshair ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Hidden);
-
-		int32 ViewportSizeX = 0;
-		int32 ViewportSizeY = 0;
-		if (APlayerController* PlayerController = GetOwningPlayerController())
-		{
-			PlayerController->GetViewportSize(ViewportSizeX, ViewportSizeY);
-		}
-
-		Widget->SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
-
-		const float ViewportScale = FMath::Max(UWidgetLayoutLibrary::GetViewportScale(this), KINDA_SMALL_NUMBER);
-		Widget->SetPositionInViewport(FVector2D(ViewportSizeX * 0.5f, ViewportSizeY * 0.5f) / ViewportScale, false);
+		Widget->UpdateTargeting(bShowCrosshair, Markers);
 	}
-
-	for (int32 MarkerIndex = 0; MarkerIndex < Markers.Num(); ++MarkerIndex)
-	{
-		const FTargetingHUDMarkerData& MarkerData = Markers[MarkerIndex];
-		UUserWidget* MarkerWidget = EnsureMarkerWidget(MarkerIndex, GetMarkerWidgetClass(MarkerData.MarkerType));
-		if (!MarkerWidget)
-		{
-			continue;
-		}
-
-		MarkerWidget->SetAlignmentInViewport(FVector2D(0.5f, 0.5f));
-		MarkerWidget->SetPositionInViewport(MarkerData.ScreenPosition, false);
-		MarkerWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
-	}
-
-	HideUnusedMarkerWidgets(Markers.Num());
 }
 
 void ACPlayerHUD::OnTargetingHUDCleared()
 {
-	if (CrosshairWidget)
+	if (GamePlayWidget)
 	{
-		CrosshairWidget->SetVisibility(ESlateVisibility::Hidden);
+		GamePlayWidget->ClearTargeting();
 	}
-
-	HideUnusedMarkerWidgets(0);
 }
 
-UUserWidget* ACPlayerHUD::EnsureCrosshairWidget()
+UPauseMenuWidget* ACPlayerHUD::ShowPauseMenu()
+{
+	UPauseMenuWidget* Widget = EnsurePauseMenuWidget();
+	if (Widget)
+	{
+		Widget->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	return Widget;
+}
+
+void ACPlayerHUD::HidePauseMenu()
+{
+	if (PauseMenuWidget)
+	{
+		PauseMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+UGamePlayWidget* ACPlayerHUD::EnsureGamePlayWidget()
 {
 	APlayerController* OwnerController = GetOwningPlayerController();
-	if (!CrosshairWidget && CrosshairWidgetClass && OwnerController)
+	if (!GamePlayWidget && GamePlayWidgetClass && OwnerController)
 	{
-		CrosshairWidget = CreateWidget<UUserWidget>(OwnerController, CrosshairWidgetClass);
-		if (CrosshairWidget)
+		GamePlayWidget = CreateWidget<UGamePlayWidget>(OwnerController, GamePlayWidgetClass);
+		if (GamePlayWidget)
 		{
-			CrosshairWidget->AddToViewport(CrosshairZOrder);
-			CrosshairWidget->SetVisibility(ESlateVisibility::Hidden);
+			GamePlayWidget->AddToViewport(GamePlayWidgetZOrder);
+			GamePlayWidget->SetVisibility(ESlateVisibility::HitTestInvisible);
 		}
 	}
 
-	return CrosshairWidget;
+	return GamePlayWidget;
 }
 
-UUserWidget* ACPlayerHUD::EnsureMarkerWidget(int32 MarkerIndex, TSubclassOf<UUserWidget> WidgetClass)
+UPauseMenuWidget* ACPlayerHUD::EnsurePauseMenuWidget()
 {
-	APlayerController* OwnerController = GetOwningPlayerController();
-	if (!WidgetClass || !OwnerController)
+	if (PauseMenuWidget)
 	{
+		return PauseMenuWidget;
+	}
+
+	if (!PauseMenuWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD is missing PauseMenuWidgetClass."));
 		return nullptr;
 	}
 
-	if (!MarkerWidgets.IsValidIndex(MarkerIndex))
+	APlayerController* OwnerController = GetOwningPlayerController();
+	if (!OwnerController)
 	{
-		MarkerWidgets.SetNum(MarkerIndex + 1);
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD could not find an owning player controller for PauseMenuWidget."));
+		return nullptr;
 	}
 
-	UUserWidget* ExistingWidget = MarkerWidgets[MarkerIndex];
-	if (ExistingWidget && ExistingWidget->GetClass() != WidgetClass)
+	PauseMenuWidget = CreateWidget<UPauseMenuWidget>(OwnerController, PauseMenuWidgetClass);
+	if (!PauseMenuWidget)
 	{
-		ExistingWidget->RemoveFromParent();
-		MarkerWidgets[MarkerIndex] = nullptr;
-		ExistingWidget = nullptr;
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD failed to create PauseMenuWidget."));
+		return nullptr;
 	}
 
-	if (!ExistingWidget)
-	{
-		ExistingWidget = CreateWidget<UUserWidget>(OwnerController, WidgetClass);
-		MarkerWidgets[MarkerIndex] = ExistingWidget;
-		if (ExistingWidget)
-		{
-			ExistingWidget->AddToViewport(MarkerZOrder);
-			ExistingWidget->SetVisibility(ESlateVisibility::Hidden);
-		}
-	}
-
-	return ExistingWidget;
+	PauseMenuWidget->OnResumeRequested.AddUObject(this, &ACPlayerHUD::HandlePauseMenuResumeRequested);
+	PauseMenuWidget->AddToViewport(PauseMenuZOrder);
+	PauseMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+	return PauseMenuWidget;
 }
 
-TSubclassOf<UUserWidget> ACPlayerHUD::GetMarkerWidgetClass(ETargetingHUDMarkerType MarkerType) const
+void ACPlayerHUD::ValidateGamePlayWidgetConfiguration() const
 {
-	switch (MarkerType)
+	if (!GamePlayWidgetClass)
 	{
-	case ETargetingHUDMarkerType::HardTarget:
-		return HardTargetWidgetClass;
-	case ETargetingHUDMarkerType::AutoTarget:
-		return AutoTargetWidgetClass;
-	case ETargetingHUDMarkerType::Targetable:
-	default:
-		return TargetPointWidgetClass;
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD is missing GamePlayWidgetClass."));
+		return;
+	}
+
+	if (!GetOwningPlayerController())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD could not find an owning player controller for GamePlayWidget."));
+		return;
+	}
+
+	if (!GamePlayWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD failed to create GamePlayWidget."));
+		return;
+	}
+
+	if (!GamePlayWidget->HasTargetingLayer())
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD GamePlayWidget is missing TargetingLayer."));
 	}
 }
 
-void ACPlayerHUD::HideUnusedMarkerWidgets(int32 FirstUnusedIndex)
+void ACPlayerHUD::HandlePauseMenuResumeRequested()
 {
-	for (int32 MarkerIndex = FirstUnusedIndex; MarkerIndex < MarkerWidgets.Num(); ++MarkerIndex)
+	ACPlayerController* PlayerController = Cast<ACPlayerController>(GetOwningPlayerController());
+	if (!PlayerController)
 	{
-		if (MarkerWidgets[MarkerIndex])
-		{
-			MarkerWidgets[MarkerIndex]->SetVisibility(ESlateVisibility::Hidden);
-		}
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD could not find CPlayerController for pause resume."));
+		return;
 	}
+
+	PlayerController->RequestResumeGame();
 }
