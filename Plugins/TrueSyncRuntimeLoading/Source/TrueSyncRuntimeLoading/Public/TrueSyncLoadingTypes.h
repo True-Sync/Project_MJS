@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "UObject/SoftObjectPtr.h"
 #include "TrueSyncLoadingTypes.generated.h"
 
 UENUM(BlueprintType)
@@ -27,4 +28,19 @@ struct TRUESYNCRUNTIMELOADING_API FTrueSyncLoadStatus
 
 	UPROPERTY(BlueprintReadOnly, Category = "TrueSync|Loading")
 	FString ErrorMessage;
+};
+
+USTRUCT(BlueprintType)
+struct TRUESYNCRUNTIMELOADING_API FTrueSyncLoadRequest
+{
+	GENERATED_BODY()
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	TArray<TSoftObjectPtr<UObject>> Assets;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	FString DebugName = TEXT("UnnamedLoad");
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bWaitForPSO = false;
 };

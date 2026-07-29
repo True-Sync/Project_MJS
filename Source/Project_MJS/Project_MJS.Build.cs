@@ -23,7 +23,8 @@ public class Project_MJS : ModuleRules
 			"Niagara",
 			"AIModule",
 			"UMG",
-			"GameplayTags"
+			"GameplayTags",
+			"TrueSyncRuntimeLoading"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor" });

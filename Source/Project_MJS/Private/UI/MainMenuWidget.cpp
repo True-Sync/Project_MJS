@@ -32,7 +32,6 @@ void UMainMenuWidget::HandleStartClicked()
 		return;
 	}
 
-	RemoveFromParent();
 	MainMenuPlayerController->RequestStartGame(StartLevelName);
 }
 
