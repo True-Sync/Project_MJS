@@ -6,6 +6,8 @@
 class UTrueSyncLoadManifest;
 class UTrueSyncLoadingSubsystem;
 
+class UUserWidget;
+
 UCLASS()
 class PROJECT_MJS_API AMainMenuPlayerController : public APlayerController
 {
@@ -16,10 +18,10 @@ protected:
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	
 public:
-	UFUNCTION(BlueprintCallable, Category = "Main Menu")
+	void ConfigureMenuInput(UUserWidget* FocusWidget);
+
 	void RequestStartGame(FName LevelName);
 
-	UFUNCTION(BlueprintCallable, Category = "Main Menu")
 	void RequestQuitGame();
 	
 	UFUNCTION(BlueprintPure, Category = "Main Menu|Loading")

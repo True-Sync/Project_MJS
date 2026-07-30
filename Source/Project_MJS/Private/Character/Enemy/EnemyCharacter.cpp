@@ -75,7 +75,7 @@ void AEnemyCharacter::Tick(float DeltaTime)
 	}
 }
 
-FVector AEnemyCharacter::GetTargetPointLocation() const
+FVector AEnemyCharacter::GetTargetPointLocation_Implementation() const
 {
 	return TargetPointComponent ? TargetPointComponent->GetComponentLocation() : GetActorLocation();
 }

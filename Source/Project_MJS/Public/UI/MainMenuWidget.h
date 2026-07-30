@@ -6,10 +6,21 @@
 
 class UButton;
 
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnMainMenuStartRequested, FName);
+DECLARE_MULTICAST_DELEGATE(FOnMainMenuSettingRequested);
+DECLARE_MULTICAST_DELEGATE(FOnMainMenuExitRequested);
+
 UCLASS()
 class PROJECT_MJS_API UMainMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
+
+public:
+	FOnMainMenuStartRequested OnStartRequested;
+
+	FOnMainMenuSettingRequested OnSettingRequested;
+
+	FOnMainMenuExitRequested OnExitRequested;
 
 protected:
 	virtual void NativeOnInitialized() override;

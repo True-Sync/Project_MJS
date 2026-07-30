@@ -1,7 +1,6 @@
 #include "Character/Player/Component/TargetingComponent.h"
 
-#include "Blueprint/WidgetLayoutLibrary.h"
-#include "Character/Enemy/EnemyCharacter.h"
+#include "Character/Shared/TargetableInterface.h"
 #include "Components/SphereComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Engine/World.h"
@@ -193,12 +192,6 @@ void UTargetingComponent::UpdateTargetingTimerState()
 
 void UTargetingComponent::PublishTargetingDisplay()
 {
-	APlayerController* PlayerController = GetOwningPlayerController();
-	if (!PlayerController)
-	{
-		return;
-	}
-
 	TArray<AActor*> DisplayTargets;
 	for (const TWeakObjectPtr<AActor>& Candidate : CandidateTargets)
 	{
@@ -224,21 +217,9 @@ void UTargetingComponent::PublishTargetingDisplay()
 
 		const FVector TargetWorldLocation = GetTargetWorldLocation(Target);
 
-		FVector2D ScreenPosition;
-		const bool bOnScreen = UWidgetLayoutLibrary::ProjectWorldLocationToWidgetPosition(
-			PlayerController,
-			TargetWorldLocation,
-			ScreenPosition,
-			true);
-		if (!bOnScreen)
-		{
-			continue;
-		}
-
 		FTargetingHUDMarkerData MarkerData;
 		MarkerData.TargetActor = Target;
 		MarkerData.WorldLocation = TargetWorldLocation;
-		MarkerData.ScreenPosition = ScreenPosition;
 		MarkerData.MarkerType = ETargetingHUDMarkerType::Targetable;
 
 		if (Target == HardTarget.Get())
@@ -521,7 +502,7 @@ APlayerController* UTargetingComponent::GetOwningPlayerController() const
 
 bool UTargetingComponent::IsValidCandidate(AActor* Candidate) const
 {
-	return Candidate && Candidate != GetOwner() && Candidate->IsA<AEnemyCharacter>();
+	return Candidate && Candidate != GetOwner() && Candidate->Implements<UTargetableInterface>();
 }
 
 bool UTargetingComponent::IsInsideAutoTargetRange(AActor* Candidate) const
@@ -590,9 +571,9 @@ float UTargetingComponent::GetCrosshairDistance(const AActor* Candidate) const
 
 FVector UTargetingComponent::GetTargetWorldLocation(const AActor* Target) const
 {
-	if (const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Target))
+	if (Target && Target->Implements<UTargetableInterface>())
 	{
-		return EnemyCharacter->GetTargetPointLocation();
+		return ITargetableInterface::Execute_GetTargetPointLocation(const_cast<AActor*>(Target));
 	}
 
 	return Target ? Target->GetActorLocation() : FVector::ZeroVector;

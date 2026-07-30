@@ -1,6 +1,7 @@
 #include "GamePlay/Controller/MainMenuPlayerController.h"
-
+#include "Blueprint/UserWidget.h"
 #include "TimerManager.h"
+
 #include "Kismet/GameplayStatics.h"
 #include "Kismet/KismetSystemLibrary.h"
 #include "TrueSyncLoadManifest.h"
@@ -11,8 +12,23 @@ void AMainMenuPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	ConfigureMenuInput(nullptr);
+}
+
+void AMainMenuPlayerController::ConfigureMenuInput(UUserWidget* FocusWidget)
+{
 	bShowMouseCursor = true;
-	SetInputMode(FInputModeUIOnly());
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+
+	FInputModeUIOnly InputMode;
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	if (FocusWidget)
+	{
+		InputMode.SetWidgetToFocus(FocusWidget->TakeWidget());
+	}
+
+	SetInputMode(InputMode);
 }
 
 void AMainMenuPlayerController::RequestStartGame(FName LevelName)

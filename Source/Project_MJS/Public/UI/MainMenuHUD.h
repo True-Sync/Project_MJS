@@ -19,4 +19,11 @@ protected:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMainMenuWidget> MainMenuWidget;
+
+private:
+	void HandleStartRequested(FName LevelName);
+
+	void HandleSettingRequested();
+
+	void HandleExitRequested();
 };

@@ -11,9 +11,10 @@
 #include "Cinematic/CinematicInputLockSubsystem.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
-#include "FMODAmbientSoundActorFactory.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
+#include "Kismet/GameplayStatics.h"
+#include "UI/PauseMenuWidget.h"
 
 #if !UE_BUILD_SHIPPING
 #include "System/Debug/DevConsoleSubsystem.h"
@@ -23,22 +24,22 @@
 void ACPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
-	
-	if (DefaultInputMappingContext && GetLocalPlayer())
-	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = GetLocalPlayer()->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
-		{
-			Subsystem->AddMappingContext(DefaultInputMappingContext, 0);
-		}
-	}
 
-	InitializeCameraRig();
+	bShowMouseCursor = false;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
+	SetInputMode(FInputModeGameOnly());
+	
+	AddDefaultInputMappingContext();
+
+	EnsureCameraRig();
 	BindToTargetingComponent();
 }
 
 void ACPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	UnbindFromTargetingComponent();
+	RemoveDefaultInputMappingContext();
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -135,6 +136,11 @@ void ACPlayerController::SetupInputComponent()
 	{
 		EnhancedInputComponent->BindAction(IA_ClearTargeting, ETriggerEvent::Started, this, &ACPlayerController::OnClearHardTargetInput);
 	}
+	
+	if (IA_Pause)
+	{
+		EnhancedInputComponent->BindAction(IA_Pause, ETriggerEvent::Started, this, &ACPlayerController::OnPauseInput);
+	}
 
 #if !UE_BUILD_SHIPPING
 	if (IA_ToggleDevConsole)
@@ -147,11 +153,6 @@ void ACPlayerController::SetupInputComponent()
 FRotator ACPlayerController::GetCameraYawRotation() const
 {
 	return CameraRig ? CameraRig->GetCameraYawRotation() : FRotator(0.0f, GetControlRotation().Yaw, 0.0f);
-}
-
-void ACPlayerController::InitializeCameraRig()
-{
-	EnsureCameraRig();
 }
 
 ACameraRigActor* ACPlayerController::EnsureCameraRig()
@@ -458,6 +459,70 @@ void ACPlayerController::OnClearHardTargetInput()
 	}
 }
 
+void ACPlayerController::OnPauseInput()
+{
+	RequestTogglePause();
+}
+
+void ACPlayerController::RequestTogglePause()
+{
+	SetGameplayPaused(!UGameplayStatics::IsGamePaused(this));
+}
+
+void ACPlayerController::RequestResumeGame()
+{
+	SetGameplayPaused(false);
+}
+
+void ACPlayerController::SetGameplayPaused(bool bShouldPause)
+{
+	ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD());
+
+	if (bShouldPause)
+	{
+		UPauseMenuWidget* PauseMenuWidget = PlayerHUD ? PlayerHUD->ShowPauseMenu() : nullptr;
+		if (!PauseMenuWidget)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("SetGameplayPaused failed because PauseMenuWidget is not available."));
+			return;
+		}
+
+		if (!SetPause(true))
+		{
+			PlayerHUD->HidePauseMenu();
+			UE_LOG(LogTemp, Warning, TEXT("SetGameplayPaused failed to pause the game."));
+			return;
+		}
+
+		bShowMouseCursor = true;
+		bEnableClickEvents = true;
+		bEnableMouseOverEvents = true;
+
+		FInputModeGameAndUI InputMode;
+		InputMode.SetHideCursorDuringCapture(false);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		InputMode.SetWidgetToFocus(PauseMenuWidget->TakeWidget());
+		SetInputMode(InputMode);
+		return;
+	}
+
+	if (!SetPause(false))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("SetGameplayPaused failed to resume the game."));
+		return;
+	}
+
+	if (PlayerHUD)
+	{
+		PlayerHUD->HidePauseMenu();
+	}
+
+	bShowMouseCursor = false;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
+	SetInputMode(FInputModeGameOnly());
+}
+
 void ACPlayerController::HandleTargetingDisplayUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers)
 {
 	if (ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD()))
@@ -512,6 +577,32 @@ bool ACPlayerController::IsCinematicGameplayInputLocked() const
 	const UWorld* World = GetWorld();
 	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
 	return InputLockSubsystem && InputLockSubsystem->IsGameplayInputLocked(this);
+}
+
+void ACPlayerController::AddDefaultInputMappingContext()
+{
+	if (!DefaultInputMappingContext || !GetLocalPlayer())
+	{
+		return;
+	}
+
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = GetLocalPlayer()->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+	{
+		Subsystem->AddMappingContext(DefaultInputMappingContext, 0);
+	}
+}
+
+void ACPlayerController::RemoveDefaultInputMappingContext()
+{
+	if (!DefaultInputMappingContext || !GetLocalPlayer())
+	{
+		return;
+	}
+
+	if (UEnhancedInputLocalPlayerSubsystem* Subsystem = GetLocalPlayer()->GetSubsystem<UEnhancedInputLocalPlayerSubsystem>())
+	{
+		Subsystem->RemoveMappingContext(DefaultInputMappingContext);
+	}
 }
 
 #if !UE_BUILD_SHIPPING

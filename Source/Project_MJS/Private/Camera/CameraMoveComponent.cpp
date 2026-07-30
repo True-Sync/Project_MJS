@@ -1,6 +1,6 @@
 #include "Camera/CameraMoveComponent.h"
 
-#include "Character/Enemy/EnemyCharacter.h"
+#include "Character/Shared/TargetableInterface.h"
 #include "GameFramework/SpringArmComponent.h"
 
 UCameraMoveComponent::UCameraMoveComponent()
@@ -240,9 +240,9 @@ void UCameraMoveComponent::UpdateRotationToFocusTarget()
 
 FVector UCameraMoveComponent::GetFocusWorldLocation() const
 {
-	if (const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(FocusTargetActor.Get()))
+	if (AActor* FocusTarget = FocusTargetActor.Get(); FocusTarget && FocusTarget->Implements<UTargetableInterface>())
 	{
-		return EnemyCharacter->GetTargetPointLocation();
+		return ITargetableInterface::Execute_GetTargetPointLocation(FocusTarget);
 	}
 
 	return FocusTargetActor.IsValid() ? FocusTargetActor->GetActorLocation() : FVector::ZeroVector;

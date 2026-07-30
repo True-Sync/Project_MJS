@@ -33,8 +33,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Cinematic|Input")
 	bool IsCinematicGameplayInputLocked() const;
 
+	void RequestTogglePause();
+
+	void RequestResumeGame();
+
 private:
-	void InitializeCameraRig();
 	ACameraRigActor* SpawnCameraRig();
 	void ApplyCameraRigToCurrentPawn();
 	void BindToTargetingComponent();
@@ -53,6 +56,7 @@ private:
 	void OnRangedHardTargetCompleted();
 	void OnRangedHardTargetCanceled();
 	void OnClearHardTargetInput();
+	void OnPauseInput();
 
 	void HandleTargetingDisplayUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers);
 	void HandleTargetingDisplayCleared();
@@ -62,6 +66,9 @@ private:
 	UTargetingComponent* GetPlayerTargetingComponent() const;
 	bool IsCinematicMoveInputLocked() const;
 	bool IsCinematicLookInputLocked() const;
+	void SetGameplayPaused(bool bShouldPause);
+	void AddDefaultInputMappingContext();
+	void RemoveDefaultInputMappingContext();
 
 	// ===== 입력 =====
 	UPROPERTY(EditDefaultsOnly, Category = "Input")
@@ -99,6 +106,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Targeting")
 	TObjectPtr<UInputAction> IA_ClearTargeting;
+	
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Pause")
+	TObjectPtr<UInputAction> IA_Pause;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Skill")
 	TObjectPtr<USkillDataAsset> Skill1Data;
