@@ -36,6 +36,7 @@ public:
 private:
 	void PollCoreLoadState();
 	void HandleStartLoadFailure(const FString& ErrorMessage);
+	void OpenStartLevel(FName LevelName);
 	void RestoreMenuInput();
 	
 	UTrueSyncLoadingSubsystem* GetLoadingSubsystem() const;

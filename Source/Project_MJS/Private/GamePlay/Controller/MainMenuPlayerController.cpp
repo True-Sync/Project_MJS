@@ -47,14 +47,15 @@ void AMainMenuPlayerController::RequestStartGame(FName LevelName)
 
 	if (!IsValid(CoreLoadManifest))
 	{
-		UE_LOG(LogTemp, Warning, TEXT("CoreLoadManifest가 설정되지 않았습니다."));
+		UE_LOG(LogTemp, Warning, TEXT("CoreLoadManifest가 없어 프리로드를 건너뜁니다."));
+		OpenStartLevel(LevelName);
 		return;
 	}
 
 	UTrueSyncLoadingSubsystem* LoadingSubsystem = GetLoadingSubsystem();
 	if (!LoadingSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("로딩 Subsystem을 찾을 수 없습니다."));
+		HandleStartLoadFailure(TEXT("로딩 Subsystem을 찾을 수 없습니다."));
 		return;
 	}
 
@@ -141,12 +142,7 @@ void AMainMenuPlayerController::PollCoreLoadState()
 		GetWorldTimerManager().ClearTimer(CoreLoadPollTimer);
 
 		bIsStartLoading = false;
-		LoadingText = TEXT("레벨을 여는 중입니다.");
-
-		bShowMouseCursor = false;
-		SetInputMode(FInputModeGameOnly());
-
-		UGameplayStatics::OpenLevel(this, PendingLevelName);
+		OpenStartLevel(PendingLevelName);
 		return;
 	}
 
@@ -165,6 +161,12 @@ void AMainMenuPlayerController::HandleStartLoadFailure(const FString& ErrorMessa
 	LoadingText = ErrorMessage.IsEmpty() ? TEXT("공통 에셋 로드에 실패했습니다.") : ErrorMessage;
 
 	RestoreMenuInput();
+}
+
+void AMainMenuPlayerController::OpenStartLevel(FName LevelName)
+{
+	LoadingText = TEXT("레벨을 여는 중입니다.");
+	UGameplayStatics::OpenLevel(this, LevelName);
 }
 
 void AMainMenuPlayerController::RestoreMenuInput()

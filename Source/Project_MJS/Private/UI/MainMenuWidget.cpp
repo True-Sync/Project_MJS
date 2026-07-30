@@ -36,16 +36,7 @@ void UMainMenuWidget::NativeOnInitialized()
 
 void UMainMenuWidget::HandleStartClicked()
 {
-	AMainMenuPlayerController* MainMenuPlayerController = Cast<AMainMenuPlayerController>(GetOwningPlayer());
-	if (!MainMenuPlayerController)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("MainMenuWidget could not find MainMenuPlayerController."));
-		return;
-	}
-
-	RemoveFromParent();
-	MainMenuPlayerController->RequestStartGame(StartLevelName);
-	OnStartRequested.Broadcast(StartLevelName); // 여기는 점검 해볼 필요가 있을듯.
+	OnStartRequested.Broadcast(StartLevelName);
 }
 
 void UMainMenuWidget::HandleSettingClicked()
