@@ -113,3 +113,5 @@ compile_commands.json
 Plugins/FMODStudio/Binaries/Win64/UnrealEditor-Win64-DebugGame.modules
 *.code-workspace
 .agent
+Plugins/.DS_Store
+.DS_Store
