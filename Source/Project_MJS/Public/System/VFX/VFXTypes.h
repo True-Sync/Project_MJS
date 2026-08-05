@@ -22,6 +22,7 @@ public:
 	UPROPERTY(BlueprintReadOnly, Category = "VFX")
 	FGuid Id;
 
+	bool IsValid() const { return Id.IsValid(); }
 	void Reset() { Id = FGuid(); }
 	bool operator==(const FVFXHandle& Other) const { return Id == Other.Id; }
 	bool operator!=(const FVFXHandle& Other) const { return !(*this == Other); }

@@ -12,6 +12,7 @@
 #include "Character/SharedComponent/StaminaComponent.h"
 #include "Cinematic/CinematicInputLockSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "System/VFX/VFXExcutorComponent.h"
 #include "System/VFX/VFXGameplayTags.h"
 #include "GameFramework/PlayerController.h"
@@ -59,9 +60,10 @@ void ACPlayerCharacter::BeginPlay()
 
 	FVFXExecuteContext Context;
 	Context.SourceActor = this;
-	Context.WorldTransform = GetActorTransform();
+	Context.AttachComponent = GetMesh();
+	Context.FloatParameterOverrides.Add(FName(TEXT("User.Intensity")), 3.0f);
 
-	VFXExcutorComponent->ExecuteVFX(ProjectVFXTags::Character_Dash_Start,Context);
+	VFXExcutorComponent->ExecuteVFX(ProjectVFXTags::Character_Dash_Start, Context);
 }
 
 float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)
