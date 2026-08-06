@@ -9,6 +9,8 @@ class USceneComponent;
 class UHealthComponent;
 class UEnemyFSMComponent;
 class UEnemyActionDataAsset;
+class UWidgetComponent;
+
 UCLASS()
 class PROJECT_MJS_API AEnemyCharacter : public ACharacter, public ITargetableInterface
 {
@@ -50,6 +52,9 @@ protected:
 	
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Weapon")
 	float WeaponTraceRadius = 25.0f;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
+	TObjectPtr<UWidgetComponent> HealthBarWidgetComponent;
 
 private:
 	void ResetHitState();
@@ -64,6 +69,9 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
 	float TargetPointHeight = 55.0f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
+	float HPBarHeight = 110.0f;
 
 	FTimerHandle HitRecoveryTimerHandle;
 	FTimerHandle HitFlashTimerHandle;

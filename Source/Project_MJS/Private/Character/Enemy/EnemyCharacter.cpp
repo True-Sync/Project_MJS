@@ -11,6 +11,8 @@
 #include "Character/SharedComponent/HealthComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/WidgetComponent.h"
+#include "UI/PlayerStatusLayerWidget.h"
 #include "Engine/DamageEvents.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
@@ -35,6 +37,12 @@ AEnemyCharacter::AEnemyCharacter()
 		GetCharacterMovement()->AvoidanceConsiderationRadius = 150.0f; // 서로 밀어내는 반경
 		GetCharacterMovement()->AvoidanceWeight = 0.5f; // 회피 가중치
 	}
+	
+	HealthBarWidgetComponent = CreateDefaultSubobject<UWidgetComponent>(TEXT("HealthBarWidget"));
+	HealthBarWidgetComponent->SetupAttachment(RootComponent);
+	HealthBarWidgetComponent->SetRelativeLocation(FVector(0.0f, 0.0f, HPBarHeight));
+	HealthBarWidgetComponent->SetWidgetSpace(EWidgetSpace::Screen);
+	HealthBarWidgetComponent->SetDrawSize(FVector2D(120.0f, 10.0f));
 }
 
 void AEnemyCharacter::OnConstruction(const FTransform& Transform)
@@ -62,6 +70,17 @@ void AEnemyCharacter::BeginPlay()
 	else
 	{
 		UE_LOG(LogTemp, Warning, TEXT("EnemyDataAsset is missing on %s!"), *GetName());
+	}
+	
+	if (HealthBarWidgetComponent)
+	{
+		if (UUserWidget* UserWidget = HealthBarWidgetComponent->GetUserWidgetObject())
+		{
+			if (UPlayerStatusLayerWidget* HealthWidget = Cast<UPlayerStatusLayerWidget>(UserWidget))
+			{
+				HealthWidget->InitHealthStatus(HealthComponent);
+			}
+		}
 	}
 }
 

@@ -49,6 +49,7 @@ void ACPlayerController::OnPossess(APawn* InPawn)
 
 	EnsureCameraRig();
 	BindToTargetingComponent();
+	BindToHealthComponent();
 }
 
 void ACPlayerController::SetupInputComponent()
@@ -230,6 +231,21 @@ void ACPlayerController::UnbindFromTargetingComponent()
 	}
 
 	BoundTargetingComponent.Reset();
+}
+
+void ACPlayerController::BindToHealthComponent()
+{
+	ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
+	if (!PlayerCharacter)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("BindToHealthComponent failed: Pawn is not ACPlayerCharacter."));
+		return;
+	}
+
+	if (ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD()))
+	{
+		PlayerHUD->InitPlayerHealthUI(PlayerCharacter->GetHealthComponent());
+	}
 }
 
 void ACPlayerController::OnMoveInput(const FInputActionValue& Value)

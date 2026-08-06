@@ -42,6 +42,7 @@ private:
 	void ApplyCameraRigToCurrentPawn();
 	void BindToTargetingComponent();
 	void UnbindFromTargetingComponent();
+	void BindToHealthComponent();
 
 	void OnMoveInput(const FInputActionValue& Value);
 	void OnJumpInput();

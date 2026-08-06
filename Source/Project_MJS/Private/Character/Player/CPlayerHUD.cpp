@@ -29,6 +29,15 @@ void ACPlayerHUD::OnTargetingHUDCleared()
 	}
 }
 
+void ACPlayerHUD::InitPlayerHealthUI(class UHealthComponent* HealthComp)
+{
+	if (UGamePlayWidget* Widget = EnsureGamePlayWidget())
+	{
+		//UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD::InitPlayerHealthUI Success"));
+		Widget->InitPlayerStatus(HealthComp);
+	}
+}
+
 UPauseMenuWidget* ACPlayerHUD::ShowPauseMenu()
 {
 	UPauseMenuWidget* Widget = EnsurePauseMenuWidget();

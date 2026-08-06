@@ -19,6 +19,8 @@ public:
 
 	void OnTargetingHUDUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers);
 	void OnTargetingHUDCleared();
+	
+	void InitPlayerHealthUI(class UHealthComponent* HealthComp);
 
 	UPauseMenuWidget* ShowPauseMenu();
 	void HidePauseMenu();
