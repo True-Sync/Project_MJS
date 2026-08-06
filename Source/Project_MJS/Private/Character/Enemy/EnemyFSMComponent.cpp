@@ -46,7 +46,14 @@ void UEnemyFSMComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	
 	if (CurrentState == EEnemyState::Approach)
 	{
-		ApproachTime += DeltaTime;
+		if (OwnerCharacter->GetVelocity().Size() < 50.0f)
+		{
+			ApproachTime += DeltaTime;
+		}
+		else
+		{
+			ApproachTime = 0.0f; 
+		}
 	}
 
 	switch (CurrentState)
@@ -54,7 +61,7 @@ void UEnemyFSMComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 	case EEnemyState::Idle: UpdateIdle(); break;
 	case EEnemyState::Approach: UpdateApproach(); break;
 	case EEnemyState::Return: UpdateReturn(); break;
-	case EEnemyState::Circling: UpdateCircling(); break; // 대기 틱 실행
+	case EEnemyState::Circling: UpdateCircling(); break; 
 	default: break;
 	}
 }
@@ -62,13 +69,13 @@ void UEnemyFSMComponent::TickComponent(float DeltaTime, ELevelTick TickType, FAc
 void UEnemyFSMComponent::ChangeState(EEnemyState NewState)
 {
 	if (CurrentState == NewState) return;
-
 	CurrentState = NewState;
 
 	if (!OwnerCharacter || !OwnerCharacter->GetEnemyData()) return;
 	UEnemyActionDataAsset* Data = OwnerCharacter->GetEnemyData();
-
-	// 💡 노티파이로 인해 상태가 바뀔 때 쿨타임 및 토큰 반납 처리 (기존 유지)
+	
+	UCharacterMovementComponent* MovementComp = OwnerCharacter->GetCharacterMovement();
+	
 	if (CurrentState == EEnemyState::Attack_Telegraph || 
 		CurrentState == EEnemyState::Attack_Execution || 
 		CurrentState == EEnemyState::Attack_Recovery)
@@ -85,7 +92,34 @@ void UEnemyFSMComponent::ChangeState(EEnemyState NewState)
 		ReleaseTokenIfHasOne();
 	}
 
-	if (NewState == EEnemyState::Approach) ApproachTime = 0.0f;
+	if (NewState == EEnemyState::Approach) 
+	{
+		ApproachTime = 0.0f;
+		float DistToPlayer = TargetPlayer ? FVector::Dist(OwnerCharacter->GetActorLocation(), TargetPlayer->GetActorLocation()) : 0.0f;
+		
+		// 거리가 Threshold 이상이면 돌진 모드 ON!
+		if (DistToPlayer >= Data->DashAttackThreshold)
+		{
+			bIsPreparingDashAttack = true;
+			if (MovementComp) MovementComp->MaxWalkSpeed = Data->DashSpeed;
+		}
+		// 일반 접근
+		else
+		{
+			bIsPreparingDashAttack = false;
+			if (MovementComp) MovementComp->MaxWalkSpeed = Data->ChaseSpeed;
+		}
+	}
+	else if (NewState == EEnemyState::Circling || NewState == EEnemyState::Idle)
+	{
+		bIsPreparingDashAttack = false;
+		if (MovementComp) MovementComp->MaxWalkSpeed = Data->PatrolSpeed;
+	}
+	else if (NewState == EEnemyState::Return)
+	{
+		bIsPreparingDashAttack = false;
+		if (MovementComp) MovementComp->MaxWalkSpeed = Data->ReturnSpeed;
+	}
 
 	switch (CurrentState)
 	{
@@ -94,49 +128,59 @@ void UEnemyFSMComponent::ChangeState(EEnemyState NewState)
 			
 		if (Data->AttackPatterns.Num() > 0)
 		{
-			float TotalWeight = 0.0f;
-			for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns) TotalWeight += Pattern.ProbabilityWeight;
-
-			float RandomValue = FMath::FRandRange(0.0f, TotalWeight);
-			float AccumulatedWeight = 0.0f;
 			FEnemyAttackPattern SelectedPattern = Data->AttackPatterns[0]; 
-
-			for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns)
+			bool bPatternSelected = false;
+			
+			if (bIsPreparingDashAttack)
 			{
-				AccumulatedWeight += Pattern.ProbabilityWeight;
-				if (RandomValue <= AccumulatedWeight)
+				for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns)
 				{
-					SelectedPattern = Pattern; 
-					break;
+					if (Pattern.AttackType == EEnemyAttackType::Dash)
+					{
+						SelectedPattern = Pattern;
+						bPatternSelected = true;
+						break;
+					}
 				}
 			}
-
-			switch (SelectedPattern.AttackType)
+			
+			if (!bPatternSelected)
 			{
-				case EEnemyAttackType::Melee:
-					if (SelectedPattern.AttackMontage)
+				float TotalWeight = 0.0f;
+				for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns) TotalWeight += Pattern.ProbabilityWeight;
+
+				float RandomValue = FMath::FRandRange(0.0f, TotalWeight);
+				float AccumulatedWeight = 0.0f;
+
+				for (const FEnemyAttackPattern& Pattern : Data->AttackPatterns)
+				{
+					AccumulatedWeight += Pattern.ProbabilityWeight;
+					if (RandomValue <= AccumulatedWeight)
 					{
-						UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
-						if (AnimInstance)
-						{
-							float PlayDuration = AnimInstance->Montage_Play(SelectedPattern.AttackMontage, SelectedPattern.AttackPlayRate);
-							
-							if (PlayDuration <= 0.0f)
-							{
-								ChangeState(EEnemyState::Idle);
-							}
-						}
+						SelectedPattern = Pattern; 
+						break;
 					}
-					else
+				}
+			}
+			
+			bIsPreparingDashAttack = false;
+
+			if (SelectedPattern.AttackMontage)
+			{
+				UAnimInstance* AnimInstance = OwnerCharacter->GetMesh()->GetAnimInstance();
+				if (AnimInstance)
+				{
+					float PlayDuration = AnimInstance->Montage_Play(SelectedPattern.AttackMontage, SelectedPattern.AttackPlayRate);
+		
+					if (PlayDuration <= 0.0f)
 					{
 						ChangeState(EEnemyState::Idle);
 					}
-					break;
-
-				case EEnemyAttackType::Dash:
-					break;
-				case EEnemyAttackType::Ranged:
-					break;
+				}
+			}
+			else
+			{
+				ChangeState(EEnemyState::Idle);
 			}
 		}
 		else
@@ -218,7 +262,11 @@ void UEnemyFSMComponent::ReleaseTokenIfHasOne()
 
 void UEnemyFSMComponent::UpdateIdle()
 {
-	if (TargetPlayer)
+	if (!TargetPlayer || !OwnerCharacter || !OwnerCharacter->GetEnemyData()) return;
+	
+	float DistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), TargetPlayer->GetActorLocation());
+	
+	if (DistanceToPlayer <= OwnerCharacter->GetEnemyData()->LeashDistance)
 	{
 		ChangeState(EEnemyState::Approach);
 	}

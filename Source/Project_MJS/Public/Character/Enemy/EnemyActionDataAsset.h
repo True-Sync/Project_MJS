@@ -72,7 +72,10 @@ public:
 	// ex) 1.2로 설정하면 촘촘하게 압박하고, 2.5로 설정하면 멀찍이서 빙빙 도는 전술적인 형태가 됩니다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "01. AI Tactics")
 	float CirclingDistanceMultiplier = 1.5f;
-
+	
+	// 토근 획득시 플레이어와의 거리가 멀시 이동공격(대시공격)을 준비하는 거리입니다.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "01. AI Tactics")
+	float DashAttackThreshold = 800.0f;
 
 	// =========================================================
 	// [02] 전투 스펙 (Combat Specs)
@@ -104,6 +107,10 @@ public:
 	// 플레이어를 발견하고 공격을 위해 달려갈 때의 뛰는 속도입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "03. Movement")
 	float ChaseSpeed = 500.0f; 
+	
+	// 이동공격(대시공격)을 할때 이동 속도입니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "03. Movement")
+	float DashSpeed = 1000.0f;
 
 	// 어그로가 풀려 스폰 위치로 복귀할 때의 뛰어가는 속도입니다.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "03. Movement")

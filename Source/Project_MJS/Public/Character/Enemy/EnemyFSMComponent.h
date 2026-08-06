@@ -56,6 +56,7 @@ private:
 	bool CheckLeashDistance();
 	void UpdateCircling();
 	void ReleaseTokenIfHasOne();
+	bool bIsPreparingDashAttack = false;
 	
 	float TokenCooldownTime = 0.0f;
 	float ApproachTime = 0.0f;

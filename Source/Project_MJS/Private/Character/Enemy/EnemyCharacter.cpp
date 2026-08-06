@@ -268,41 +268,46 @@ void AEnemyCharacter::WeaponTraceTick()
 	FCollisionQueryParams QueryParams;
 	QueryParams.AddIgnoredActor(this); 
 
-	bool bHit = GetWorld()->SweepMultiByChannel(
+	FCollisionObjectQueryParams ObjectQueryParams;
+	ObjectQueryParams.AddObjectTypesToQuery(ECC_Pawn);
+	
+	bool bHit = GetWorld()->SweepMultiByObjectType(
 		HitResults,
 		StartLoc,
 		EndLoc,
 		FQuat::Identity,
-		ECC_Pawn, 
+		ObjectQueryParams,
 		FCollisionShape::MakeSphere(WeaponTraceRadius),
 		QueryParams
 	);
 	
-	DrawDebugCapsule(GetWorld(), 
-		(StartLoc + EndLoc) * 0.5f, 
-		FVector::Dist(StartLoc, EndLoc) * 0.5f, WeaponTraceRadius, 
-		(EndLoc - StartLoc).Rotation().Quaternion(), 
-		bHit ? FColor::Red : FColor::Green, 
-		false,
-		0.5f);
+	bool bHitPlayer = false;
 	
 	if (bHit)
 	{
 		for (const FHitResult& Hit : HitResults)
 		{
 			AActor* HitActor = Hit.GetActor();
-			if (HitActor && HitActor->IsA<AEnemyCharacter>())
+			
+			if (HitActor && HitActor == UGameplayStatics::GetPlayerPawn(GetWorld(), 0))
 			{
-				continue;
-			}
-			if (HitActor && !HitActors.Contains(HitActor))
-			{
-				HitActors.Add(HitActor); 
-
-				// 데미지 적용
-				float DamageAmount = 20.0f; 
-				UGameplayStatics::ApplyDamage(HitActor, DamageAmount, GetController(), this, UDamageType::StaticClass());
+				if (!HitActors.Contains(HitActor))
+				{
+					HitActors.Add(HitActor); 
+					bHitPlayer = true;
+					
+					float DamageAmount = EnemyDataAsset ? EnemyDataAsset->BaseDamage : 20.0f; 
+					UGameplayStatics::ApplyDamage(HitActor, DamageAmount, GetController(), this, UDamageType::StaticClass());
+				}
 			}
 		}
 	}
+	
+	DrawDebugCapsule(GetWorld(), 
+		(StartLoc + EndLoc) * 0.5f, 
+		FVector::Dist(StartLoc, EndLoc) * 0.5f, WeaponTraceRadius, 
+		(EndLoc - StartLoc).Rotation().Quaternion(), 
+		bHitPlayer ? FColor::Red : FColor::Green, 
+		false,
+		0.5f);
 }
