@@ -9,12 +9,16 @@
 #include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Character/Player/Component/TargetingComponent.h"
 #include "Cinematic/CinematicInputLockSubsystem.h"
+#include "CommandBox/CommandBoxActor.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Engine/LocalPlayer.h"
+#include "Interaction/Interactable.h"
+#include "Interaction/InteractionComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "UI/PauseMenuWidget.h"
+#include "UI/CommandBoxMenuWidget.h"
 
 #if !UE_BUILD_SHIPPING
 #include "System/Debug/DevConsoleSubsystem.h"
@@ -38,6 +42,12 @@ void ACPlayerController::BeginPlay()
 
 void ACPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (bCommandBoxMenuOpen)
+	{
+		CloseCommandBoxMenu();
+	}
+
+	ActiveCommandBox.Reset();
 	UnbindFromTargetingComponent();
 	RemoveDefaultInputMappingContext();
 	Super::EndPlay(EndPlayReason);
@@ -142,6 +152,11 @@ void ACPlayerController::SetupInputComponent()
 		EnhancedInputComponent->BindAction(IA_Pause, ETriggerEvent::Started, this, &ACPlayerController::OnPauseInput);
 	}
 
+	if (IA_Interact)
+	{
+		EnhancedInputComponent->BindAction(IA_Interact, ETriggerEvent::Started, this, &ACPlayerController::OnInteractInput);
+	}
+
 #if !UE_BUILD_SHIPPING
 	if (IA_ToggleDevConsole)
 	{
@@ -234,7 +249,7 @@ void ACPlayerController::UnbindFromTargetingComponent()
 
 void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 {
-	if (IsCinematicMoveInputLocked())
+	if (bCommandBoxMenuOpen || IsCinematicMoveInputLocked())
 	{
 		return;
 	}
@@ -253,7 +268,7 @@ void ACPlayerController::OnMoveInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnJumpInput()
 {
-	if (IsCinematicMoveInputLocked() || IsCinematicGameplayInputLocked())
+	if (bCommandBoxMenuOpen || IsCinematicMoveInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -273,7 +288,7 @@ void ACPlayerController::OnJumpInput()
 
 void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 {
-	if (IsCinematicLookInputLocked())
+	if (bCommandBoxMenuOpen || IsCinematicLookInputLocked())
 	{
 		return;
 	}
@@ -293,7 +308,7 @@ void ACPlayerController::OnLookInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnCameraZoomInput(const FInputActionValue& Value)
 {
-	if (IsCinematicLookInputLocked())
+	if (bCommandBoxMenuOpen || IsCinematicLookInputLocked())
 	{
 		return;
 	}
@@ -312,7 +327,7 @@ void ACPlayerController::OnCameraZoomInput(const FInputActionValue& Value)
 
 void ACPlayerController::OnAttackInput()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -330,7 +345,7 @@ void ACPlayerController::OnAttackInput()
 
 void ACPlayerController::OnDodgeInput()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -362,7 +377,7 @@ void ACPlayerController::OnDodgeInput()
 
 void ACPlayerController::OnSkill1Input()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -379,7 +394,7 @@ void ACPlayerController::OnSkill1Input()
 
 void ACPlayerController::OnSkill2Input()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -396,7 +411,7 @@ void ACPlayerController::OnSkill2Input()
 
 void ACPlayerController::OnHardTargetInput()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -409,7 +424,7 @@ void ACPlayerController::OnHardTargetInput()
 
 void ACPlayerController::OnRangedHardTargetTriggered()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -422,7 +437,7 @@ void ACPlayerController::OnRangedHardTargetTriggered()
 
 void ACPlayerController::OnRangedHardTargetCompleted()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -435,7 +450,7 @@ void ACPlayerController::OnRangedHardTargetCompleted()
 
 void ACPlayerController::OnRangedHardTargetCanceled()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -448,7 +463,7 @@ void ACPlayerController::OnRangedHardTargetCanceled()
 
 void ACPlayerController::OnClearHardTargetInput()
 {
-	if (IsCinematicGameplayInputLocked())
+	if (IsCommandBoxGameplayInputLocked() || IsCinematicGameplayInputLocked())
 	{
 		return;
 	}
@@ -461,7 +476,26 @@ void ACPlayerController::OnClearHardTargetInput()
 
 void ACPlayerController::OnPauseInput()
 {
+	if (bCommandBoxMenuOpen)
+	{
+		CloseCommandBoxMenu();
+		return;
+	}
+
 	RequestTogglePause();
+}
+
+void ACPlayerController::OnInteractInput()
+{
+	if (bCommandBoxMenuOpen || IsCinematicGameplayInputLocked())
+	{
+		return;
+	}
+
+	if (UInteractionComponent* InteractionComponent = GetPlayerInteractionComponent())
+	{
+		InteractionComponent->TryInteract();
+	}
 }
 
 void ACPlayerController::RequestTogglePause()
@@ -472,6 +506,102 @@ void ACPlayerController::RequestTogglePause()
 void ACPlayerController::RequestResumeGame()
 {
 	SetGameplayPaused(false);
+}
+
+void ACPlayerController::OpenCommandBoxMenu(ACommandBoxActor* CommandBox)
+{
+	if (bCommandBoxMenuOpen || !IsValid(CommandBox))
+	{
+		return;
+	}
+
+	ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD());
+	UCommandBoxMenuWidget* MenuWidget = PlayerHUD ? PlayerHUD->ShowCommandBoxMenu() : nullptr;
+	if (!MenuWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("OpenCommandBoxMenu failed because CommandBoxMenuWidget is not available."));
+		return;
+	}
+
+	ActiveCommandBox = CommandBox;
+	bCommandBoxMenuOpen = true;
+	if (UInteractionComponent* InteractionComponent = GetPlayerInteractionComponent())
+	{
+		InteractionComponent->SetInteractionPromptEnabled(false);
+	}
+
+	SetIgnoreMoveInput(true);
+	SetIgnoreLookInput(true);
+	bShowMouseCursor = true;
+	bEnableClickEvents = true;
+	bEnableMouseOverEvents = true;
+
+	FInputModeGameAndUI InputMode;
+	InputMode.SetHideCursorDuringCapture(false);
+	InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	InputMode.SetWidgetToFocus(MenuWidget->TakeWidget());
+	SetInputMode(InputMode);
+}
+
+void ACPlayerController::CloseCommandBoxMenu()
+{
+	if (!bCommandBoxMenuOpen)
+	{
+		return;
+	}
+
+	if (ACPlayerHUD* PlayerHUD = Cast<ACPlayerHUD>(GetHUD()))
+	{
+		PlayerHUD->HideCommandBoxMenu();
+	}
+
+	bCommandBoxMenuOpen = false;
+	ActiveCommandBox.Reset();
+
+	SetIgnoreMoveInput(false);
+	SetIgnoreLookInput(false);
+	bShowMouseCursor = false;
+	bEnableClickEvents = false;
+	bEnableMouseOverEvents = false;
+	SetInputMode(FInputModeGameOnly());
+
+	if (UInteractionComponent* InteractionComponent = GetPlayerInteractionComponent())
+	{
+		InteractionComponent->SetInteractionPromptEnabled(true);
+	}
+}
+
+void ACPlayerController::RequestCommandBoxHousing()
+{
+	ACommandBoxActor* CommandBox = ActiveCommandBox.Get();
+	CloseCommandBoxMenu();
+	if (IsValid(CommandBox))
+	{
+		IInteractable::Execute_SetInteractionPromptVisible(CommandBox, false);
+		CommandBox->RequestHousing(this);
+	}
+}
+
+void ACPlayerController::RequestCommandBoxCostume()
+{
+	ACommandBoxActor* CommandBox = ActiveCommandBox.Get();
+	CloseCommandBoxMenu();
+	if (IsValid(CommandBox))
+	{
+		IInteractable::Execute_SetInteractionPromptVisible(CommandBox, false);
+		CommandBox->RequestCostume(this);
+	}
+}
+
+void ACPlayerController::RequestCommandBoxStageTravel()
+{
+	ACommandBoxActor* CommandBox = ActiveCommandBox.Get();
+	CloseCommandBoxMenu();
+	if (IsValid(CommandBox))
+	{
+		IInteractable::Execute_SetInteractionPromptVisible(CommandBox, false);
+		CommandBox->RequestStageTravel(this);
+	}
 }
 
 void ACPlayerController::SetGameplayPaused(bool bShouldPause)
@@ -570,6 +700,17 @@ bool ACPlayerController::IsCinematicLookInputLocked() const
 	const UWorld* World = GetWorld();
 	const UCinematicInputLockSubsystem* InputLockSubsystem = World ? World->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
 	return InputLockSubsystem && InputLockSubsystem->IsLookInputLocked(this);
+}
+
+UInteractionComponent* ACPlayerController::GetPlayerInteractionComponent() const
+{
+	const ACPlayerCharacter* PlayerCharacter = GetPlayerCharacter();
+	return PlayerCharacter ? PlayerCharacter->GetInteractionComponent() : nullptr;
+}
+
+bool ACPlayerController::IsCommandBoxGameplayInputLocked() const
+{
+	return bCommandBoxMenuOpen;
 }
 
 bool ACPlayerController::IsCinematicGameplayInputLocked() const

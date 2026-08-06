@@ -16,6 +16,7 @@ class UCinematicParticipantComponent;
 class UDodgeComponent;
 class UTargetingComponent;
 class UHealthComponent;
+class UInteractionComponent;
 class UStaminaComponent;
 
 UCLASS()
@@ -42,6 +43,7 @@ public:
 	UDodgeComponent* GetDodgeComponent() const { return DodgeComponent; }
 	USkillComponent* GetSkillComponent() const { return SkillComponent; }
 	UTargetingComponent* GetTargetingComponent() const { return TargetingComponent; }
+	UInteractionComponent* GetInteractionComponent() const { return InteractionComponent; }
 	UCinematicActionComponent* GetCinematicActionComponent() const { return CinematicActionComponent; }
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
@@ -78,6 +80,9 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Targeting", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UTargetingComponent> TargetingComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Interaction", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UInteractionComponent> InteractionComponent;
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Cinematic", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UCinematicActionComponent> CinematicActionComponent;
