@@ -8,6 +8,7 @@
 #include "Character/SharedComponent/StaminaComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "System/VFX/VFXExcutorComponent.h"
 
 UDodgeComponent::UDodgeComponent()
 {
@@ -43,7 +44,14 @@ bool UDodgeComponent::RequestDodge()
 			StaminaComponent->GetCurrentStamina(), DodgeStaminaCost.StaminaCost);
 		return false;
 	}
-
+	
+	UVFXExcutorComponent* VFXExecuterComponent = OwnerCharacter->FindComponentByClass<UVFXExcutorComponent>();
+	if(!IsValid(VFXExecuterComponent))
+	{
+		UE_LOG(LogTemp, Log, TEXT("RequestDodge rejected: VFXExecuterComponent is Missing. Character = %s"), *GetNameSafe(OwnerCharacter));
+		return false;
+	}
+	
 	FVector DodgeDirection;
 	const ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter);
 	const bool bHasMoveInput = PlayerCharacter && PlayerCharacter->GetLastMoveWorldDirection(DodgeDirection);

@@ -133,7 +133,7 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "VFX")
 	TSoftObjectPtr<UNiagaraSystem> NiagaraSystem;
 
-	// Niagara 생성 또는 부착 방식
+	// Niagara 생성 또는 부착 방식(기본 값 WorldLocation)
 	UPROPERTY(EditDefaultsOnly,BlueprintReadOnly, Category = "VFX|Attachment")
 	EVFXAttachmentMode AttachmentMode = EVFXAttachmentMode::WorldLocation;
 
