@@ -172,7 +172,7 @@ FVFXExecuteContext UDodgeComponent::MakeDodgeVFXContext(const FVector& DodgeDire
 	return Context;
 }
 
-void UDodgeComponent::PlayDodgeStartVFX(const FVector& DodgeDirection)
+void UDodgeComponent::StartDodgeOneShotVFX(const FVector& DodgeDirection)
 {
 	//OneShot 전용 -> 따로 핸들 필요 없음.
 	if (UVFXExcutorComponent* VFXExcutor = ResolveVFXExcutor())

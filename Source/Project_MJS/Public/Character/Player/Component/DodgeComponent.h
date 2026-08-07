@@ -31,7 +31,7 @@ private:
 	// VFX	
 	UVFXExcutorComponent* ResolveVFXExcutor();
 	FVFXExecuteContext MakeDodgeVFXContext(const FVector& DodgeDirection);
-	void PlayDodgeStartVFX(const FVector& DodgeDirection);
+	void StartDodgeOneShotVFX(const FVector& DodgeDirection);
 	void StartDodgeLoopVFX(const FVector& DodgeDirection);
 	void StopDodgeLoopVFX();
 	void FinishDodgeVFX();
