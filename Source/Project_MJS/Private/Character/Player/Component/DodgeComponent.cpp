@@ -9,6 +9,7 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "System/VFX/VFXExcutorComponent.h"
+#include "System/VFX/VFXGameplayTags.h"
 
 UDodgeComponent::UDodgeComponent()
 {
@@ -74,14 +75,16 @@ bool UDodgeComponent::RequestDodge()
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: AnimInstance is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
 		return false;
 	}
-
+	
 	const float Duration = AnimInstance->Montage_Play(MontageToPlay);
 	if (Duration <= 0.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(MontageToPlay));
 		return false;
 	}
-
+	
+	StartDodgeLoopVFX(OwnerCharacter->GetActorLocation());
+	
 	if (!StaminaComponent->ConsumeStamina(DodgeStaminaCost))
 	{
 		AnimInstance->Montage_Stop(0.0f, MontageToPlay);
@@ -134,6 +137,83 @@ bool UDodgeComponent::ConsumeJustDodgeCounter()
 	return true;
 }
 
+UVFXExcutorComponent* UDodgeComponent::ResolveVFXExcutor()
+{
+	if (IsValid(CachedVFXExecutor))
+		return CachedVFXExecutor;
+	
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+		return nullptr;
+	
+	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExcutorComponent>();
+	return CachedVFXExecutor;
+}
+
+
+//=============== VFX =================
+
+FVFXExecuteContext UDodgeComponent::MakeDodgeVFXContext(const FVector& DodgeDirection)
+{
+	FVFXExecuteContext Context;
+
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+	{
+		return Context;
+	}
+
+	Context.SourceActor = Owner;
+	Context.TargetActor = Owner;
+	Context.WorldTransform = Owner->GetActorTransform();
+	Context.AttachComponent = Owner->GetRootComponent();
+	Context.Direction = DodgeDirection;
+
+	return Context;
+}
+
+void UDodgeComponent::PlayDodgeStartVFX(const FVector& DodgeDirection)
+{
+	//OneShot 전용 -> 따로 핸들 필요 없음.
+	if (UVFXExcutorComponent* VFXExcutor = ResolveVFXExcutor())
+	{
+		VFXExcutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_Start,MakeDodgeVFXContext(DodgeDirection));
+	}
+}
+
+void UDodgeComponent::StartDodgeLoopVFX(const FVector& DodgeDirection)
+{
+	//Loop 전용
+	UVFXExcutorComponent* VFXExecutor = ResolveVFXExcutor();
+	if (!IsValid(VFXExecutor))
+		return;
+	
+	StopDodgeLoopVFX(); //기존 Loop 정리
+	DodgeLoopVFXHandle = VFXExecutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_Loop, MakeDodgeVFXContext(DodgeDirection));
+}
+
+void UDodgeComponent::StopDodgeLoopVFX()
+{
+	if (!DodgeLoopVFXHandle.IsValid())
+		return;
+	
+	if (UVFXExcutorComponent* VFXExcutor = ResolveVFXExcutor())
+		VFXExcutor->StopVFX(DodgeLoopVFXHandle);
+	
+	DodgeLoopVFXHandle.Reset();
+}
+
+void UDodgeComponent::FinishDodgeVFX()
+{
+	StopDodgeLoopVFX();
+	AActor* Owner = GetOwner();
+	
+	UVFXExcutorComponent* VFXExecutor = ResolveVFXExcutor();
+	if (!IsValid(VFXExecutor))
+		VFXExecutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_End,MakeDodgeVFXContext(Owner->GetActorLocation()));
+}
+
+
 void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
 	if (Montage != ActiveDodgeMontage)
@@ -141,6 +221,7 @@ void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupt
 		return;
 	}
 
+	StopDodgeLoopVFX();
 	bIsDodging = false;
 	bJustDodgeConsumed = false;
 	ActiveDodgeMontage = nullptr;

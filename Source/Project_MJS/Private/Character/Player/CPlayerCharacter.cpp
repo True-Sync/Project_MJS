@@ -51,19 +51,6 @@ void ACPlayerCharacter::BeginPlay()
 	Super::BeginPlay();
 
 	UE_LOG(LogTemp, Log, TEXT("[VFX Test] Player BeginPlay"));
-
-	if (!IsValid(VFXExcutorComponent))
-	{
-		UE_LOG(LogTemp,Error,TEXT("[VFX Test] VFXExcutorComponent가 없음"));
-		return;
-	}
-
-	FVFXExecuteContext Context;
-	Context.SourceActor = this;
-	Context.AttachComponent = GetMesh();
-	Context.FloatParameterOverrides.Add(FName(TEXT("User.Intensity")), 3.0f);
-
-	VFXExcutorComponent->ExecuteVFX(ProjectVFXTags::Character_Dash_Start, Context);
 }
 
 float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)

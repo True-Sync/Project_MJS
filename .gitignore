@@ -115,3 +115,4 @@ Plugins/FMODStudio/Binaries/Win64/UnrealEditor-Win64-DebugGame.modules
 .agent
 Plugins/.DS_Store
 .DS_Store
+Project_MJS.uproject.DotSettings.user
