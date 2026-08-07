@@ -7,6 +7,7 @@
 
 class UGamePlayWidget;
 class UCommandBoxMenuWidget;
+class UHousingMainWidget;
 class UPauseMenuWidget;
 class UUserWidget;
 
@@ -17,6 +18,7 @@ class PROJECT_MJS_API ACPlayerHUD : public AHUD
 
 public:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	void OnTargetingHUDUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers);
 	void OnTargetingHUDCleared();
@@ -31,6 +33,7 @@ private:
 	UGamePlayWidget* EnsureGamePlayWidget();
 	UPauseMenuWidget* EnsurePauseMenuWidget();
 	UCommandBoxMenuWidget* EnsureCommandBoxMenuWidget();
+	UHousingMainWidget* EnsureHousingMainWidget();
 	void ValidateGamePlayWidgetConfiguration() const;
 
 	void HandlePauseMenuResumeRequested();
@@ -52,6 +55,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Gameplay|HUD")
 	TSubclassOf<UCommandBoxMenuWidget> CommandBoxMenuWidgetClass;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Gameplay|HUD")
+	TSubclassOf<UHousingMainWidget> HousingMainWidgetClass;
+
 	UPROPERTY(EditAnywhere, Category = "Gameplay|HUD")
 	int32 GamePlayWidgetZOrder = 0;
 
@@ -61,6 +67,9 @@ private:
 	UPROPERTY(EditAnywhere, Category = "Gameplay|HUD")
 	int32 CommandBoxMenuZOrder = 50;
 
+	UPROPERTY(EditAnywhere, Category = "Gameplay|HUD")
+	int32 HousingMainWidgetZOrder = 60;
+
 	UPROPERTY(Transient)
 	TObjectPtr<UGamePlayWidget> GamePlayWidget;
 
@@ -69,4 +78,7 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCommandBoxMenuWidget> CommandBoxMenuWidget;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UHousingMainWidget> HousingMainWidget;
 };

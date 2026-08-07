@@ -11,6 +11,7 @@ class ACPlayerCharacter;
 class UInputAction;
 class UInputMappingContext;
 class UInteractionComponent;
+class UHousingPlacementComponent;
 class USkillDataAsset;
 class UTargetingComponent;
 class UUserWidget;
@@ -28,6 +29,8 @@ protected:
 	virtual void SetupInputComponent() override;
 
 public:
+	ACPlayerController();
+
 	FRotator GetCameraYawRotation() const;
 	ACameraRigActor* GetCameraRig() const { return CameraRig; }
 	ACameraRigActor* EnsureCameraRig();
@@ -44,6 +47,7 @@ public:
 	void RequestCommandBoxCostume();
 	void RequestCommandBoxStageTravel();
 	bool IsCommandBoxMenuOpen() const { return bCommandBoxMenuOpen; }
+	UHousingPlacementComponent* GetHousingPlacementComponent() const { return HousingPlacementComponent; }
 
 private:
 	ACameraRigActor* SpawnCameraRig();
@@ -76,7 +80,7 @@ private:
 	UInteractionComponent* GetPlayerInteractionComponent() const;
 	bool IsCinematicMoveInputLocked() const;
 	bool IsCinematicLookInputLocked() const;
-	bool IsCommandBoxGameplayInputLocked() const;
+	bool IsModalGameplayInputLocked() const;
 	void SetGameplayPaused(bool bShouldPause);
 	void AddDefaultInputMappingContext();
 	void RemoveDefaultInputMappingContext();
@@ -144,6 +148,9 @@ private:
 
 	UPROPERTY(Transient)
 	TWeakObjectPtr<ACommandBoxActor> ActiveCommandBox;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Housing", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHousingPlacementComponent> HousingPlacementComponent;
 
 	bool bCommandBoxMenuOpen = false;
 

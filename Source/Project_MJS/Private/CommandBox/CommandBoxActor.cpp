@@ -7,6 +7,7 @@
 #include "Components/WidgetComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Interaction/InteractionComponent.h"
+#include "Housing/HousingSubsystem.h"
 
 ACommandBoxActor::ACommandBoxActor()
 {
@@ -43,6 +44,19 @@ void ACommandBoxActor::BeginPlay()
 	InteractionVolume->OnComponentBeginOverlap.AddDynamic(this, &ACommandBoxActor::HandleInteractionBeginOverlap);
 	InteractionVolume->OnComponentEndOverlap.AddDynamic(this, &ACommandBoxActor::HandleInteractionEndOverlap);
 	SetInteractionPromptVisible_Implementation(false);
+
+	if (UHousingSubsystem* HousingSubsystem = GetWorld()->GetSubsystem<UHousingSubsystem>())
+	{
+		OnHousingRequested.AddUObject(HousingSubsystem, &UHousingSubsystem::HandleCommandBoxHousingRequested);
+	}
+}
+
+void ACommandBoxActor::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	OnHousingRequested.Clear();
+	OnCostumeRequested.Clear();
+	OnStageTravelRequested.Clear();
+	Super::EndPlay(EndPlayReason);
 }
 
 bool ACommandBoxActor::CanInteract_Implementation(APawn* InteractingPawn) const

@@ -7,6 +7,7 @@
 
 class ACPlayerController;
 class ACommandBoxActor;
+class AHousingAreaActor;
 class UBoxComponent;
 class UPrimitiveComponent;
 class UInteractionComponent;
@@ -34,6 +35,7 @@ public:
 	void RequestHousing(ACPlayerController* PlayerController);
 	void RequestCostume(ACPlayerController* PlayerController);
 	void RequestStageTravel(ACPlayerController* PlayerController);
+	AHousingAreaActor* GetHousingArea() const { return HousingArea; }
 
 	FCommandBoxFeatureRequestedSignature OnHousingRequested;
 
@@ -43,6 +45,7 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 private:
 	UFUNCTION()
@@ -75,5 +78,8 @@ private:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Command Box|Interaction", meta = (AllowPrivateAccess = "true"))
 	bool bInteractionEnabled = true;
+
+	UPROPERTY(EditInstanceOnly, BlueprintReadOnly, Category = "Command Box|Housing", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<AHousingAreaActor> HousingArea;
 
 };

@@ -4,14 +4,22 @@
 #include "Character/Player/CPlayerController.h"
 #include "UI/CommandBoxMenuWidget.h"
 #include "UI/GamePlayWidget.h"
+#include "UI/HousingMainWidget.h"
 #include "UI/PauseMenuWidget.h"
+#include "Housing/HousingPlacementComponent.h"
 
 void ACPlayerHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
 	EnsureGamePlayWidget();
+	EnsureHousingMainWidget();
 	ValidateGamePlayWidgetConfiguration();
+}
+
+void ACPlayerHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACPlayerHUD::OnTargetingHUDUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers)
@@ -151,6 +159,40 @@ UCommandBoxMenuWidget* ACPlayerHUD::EnsureCommandBoxMenuWidget()
 	CommandBoxMenuWidget->AddToViewport(CommandBoxMenuZOrder);
 	CommandBoxMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
 	return CommandBoxMenuWidget;
+}
+
+UHousingMainWidget* ACPlayerHUD::EnsureHousingMainWidget()
+{
+	if (HousingMainWidget)
+	{
+		return HousingMainWidget;
+	}
+
+	if (!HousingMainWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD is missing HousingMainWidgetClass."));
+		return nullptr;
+	}
+
+	APlayerController* OwnerController = GetOwningPlayerController();
+	if (!OwnerController)
+	{
+		return nullptr;
+	}
+
+	HousingMainWidget = CreateWidget<UHousingMainWidget>(OwnerController, HousingMainWidgetClass);
+	if (!HousingMainWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD failed to create HousingMainWidget."));
+		return nullptr;
+	}
+
+	if (const ACPlayerController* PlayerController = Cast<ACPlayerController>(OwnerController))
+	{
+		HousingMainWidget->InitializeHousing(PlayerController->GetHousingPlacementComponent());
+	}
+	HousingMainWidget->AddToViewport(HousingMainWidgetZOrder);
+	return HousingMainWidget;
 }
 
 void ACPlayerHUD::ValidateGamePlayWidgetConfiguration() const
