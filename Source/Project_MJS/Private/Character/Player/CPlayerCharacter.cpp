@@ -12,6 +12,9 @@
 #include "Character/SharedComponent/StaminaComponent.h"
 #include "Cinematic/CinematicInputLockSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "System/VFX/VFXExcutorComponent.h"
+#include "System/VFX/VFXGameplayTags.h"
 #include "GameFramework/PlayerController.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/World.h"
@@ -30,6 +33,7 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
 	StaminaComponent = CreateDefaultSubobject<UStaminaComponent>(TEXT("StaminaComponent"));
+	VFXExcutorComponent = CreateDefaultSubobject<UVFXExcutorComponent>(TEXT("VFXExecutorComponent"));
 	
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
@@ -45,7 +49,8 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 void ACPlayerCharacter::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+	UE_LOG(LogTemp, Log, TEXT("[VFX Test] Player BeginPlay"));
 }
 
 float ACPlayerCharacter::TakeDamage(float DamageAmount, FDamageEvent const& DamageEvent, AController* EventInstigator, AActor* DamageCauser)

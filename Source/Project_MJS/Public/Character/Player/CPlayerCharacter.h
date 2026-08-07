@@ -17,6 +17,7 @@ class UDodgeComponent;
 class UTargetingComponent;
 class UHealthComponent;
 class UStaminaComponent;
+class UVFXExcutorComponent;
 
 UCLASS()
 class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicParticipant
@@ -46,6 +47,7 @@ public:
 	UCinematicParticipantComponent* GetCinematicParticipantComponent() const { return CinematicParticipantComponent; }
 	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
 	UStaminaComponent* GetStaminaComponent() const { return StaminaComponent; }
+	
 
 	// ===== Debug Helpers (Phase 1: Test Loop Recovery) =====
 	UFUNCTION(BlueprintCallable, Category = "Debug")
@@ -90,4 +92,7 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Combat", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UStaminaComponent> StaminaComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|VFX", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UVFXExcutorComponent> VFXExcutorComponent;
 };
