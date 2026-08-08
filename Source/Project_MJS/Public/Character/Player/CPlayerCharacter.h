@@ -17,7 +17,7 @@ class UDodgeComponent;
 class UTargetingComponent;
 class UHealthComponent;
 class UStaminaComponent;
-class UVFXExcutorComponent;
+class UVFXExecutorComponent;
 
 UCLASS()
 class PROJECT_MJS_API ACPlayerCharacter : public ACharacter, public ICinematicParticipant
@@ -94,5 +94,5 @@ private:
 	TObjectPtr<UStaminaComponent> StaminaComponent;
 	
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|VFX", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UVFXExcutorComponent> VFXExcutorComponent;
+	TObjectPtr<UVFXExecutorComponent> VFXExcutorComponent;
 };
