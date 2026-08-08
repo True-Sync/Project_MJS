@@ -8,7 +8,7 @@
 #include "Character/SharedComponent/StaminaComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
-#include "System/VFX/VFXExcutorComponent.h"
+#include "System/VFX/VFXExecutorComponent.h"
 #include "System/VFX/VFXGameplayTags.h"
 
 UDodgeComponent::UDodgeComponent()
@@ -46,7 +46,7 @@ bool UDodgeComponent::RequestDodge()
 		return false;
 	}
 	
-	UVFXExcutorComponent* VFXExecuterComponent = OwnerCharacter->FindComponentByClass<UVFXExcutorComponent>();
+	UVFXExecutorComponent* VFXExecuterComponent = OwnerCharacter->FindComponentByClass<UVFXExecutorComponent>();
 	if(!IsValid(VFXExecuterComponent))
 	{
 		UE_LOG(LogTemp, Log, TEXT("RequestDodge rejected: VFXExecuterComponent is Missing. Character = %s"), *GetNameSafe(OwnerCharacter));
@@ -137,7 +137,7 @@ bool UDodgeComponent::ConsumeJustDodgeCounter()
 	return true;
 }
 
-UVFXExcutorComponent* UDodgeComponent::ResolveVFXExcutor()
+UVFXExecutorComponent* UDodgeComponent::ResolveVFXExecutor()
 {
 	if (IsValid(CachedVFXExecutor))
 		return CachedVFXExecutor;
@@ -146,7 +146,7 @@ UVFXExcutorComponent* UDodgeComponent::ResolveVFXExcutor()
 	if (!IsValid(Owner))
 		return nullptr;
 	
-	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExcutorComponent>();
+	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExecutorComponent>();
 	return CachedVFXExecutor;
 }
 
@@ -175,21 +175,21 @@ FVFXExecuteContext UDodgeComponent::MakeDodgeVFXContext(const FVector& DodgeDire
 void UDodgeComponent::StartDodgeOneShotVFX(const FVector& DodgeDirection)
 {
 	//OneShot 전용 -> 따로 핸들 필요 없음.
-	if (UVFXExcutorComponent* VFXExcutor = ResolveVFXExcutor())
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
 	{
-		VFXExcutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_Start,MakeDodgeVFXContext(DodgeDirection));
+		VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_Start,MakeDodgeVFXContext(DodgeDirection));
 	}
 }
 
 void UDodgeComponent::StartDodgeLoopVFX(const FVector& DodgeDirection)
 {
 	//Loop 전용
-	UVFXExcutorComponent* VFXExecutor = ResolveVFXExcutor();
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
 	if (!IsValid(VFXExecutor))
 		return;
 	
 	StopDodgeLoopVFX(); //기존 Loop 정리
-	DodgeLoopVFXHandle = VFXExecutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_Loop, MakeDodgeVFXContext(DodgeDirection));
+	DodgeLoopVFXHandle = VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_Loop, MakeDodgeVFXContext(DodgeDirection));
 }
 
 void UDodgeComponent::StopDodgeLoopVFX()
@@ -197,8 +197,8 @@ void UDodgeComponent::StopDodgeLoopVFX()
 	if (!DodgeLoopVFXHandle.IsValid())
 		return;
 	
-	if (UVFXExcutorComponent* VFXExcutor = ResolveVFXExcutor())
-		VFXExcutor->StopVFX(DodgeLoopVFXHandle);
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+		VFXExecutor->StopVFX(DodgeLoopVFXHandle);
 	
 	DodgeLoopVFXHandle.Reset();
 }
@@ -208,9 +208,9 @@ void UDodgeComponent::FinishDodgeVFX()
 	StopDodgeLoopVFX();
 	AActor* Owner = GetOwner();
 	
-	UVFXExcutorComponent* VFXExecutor = ResolveVFXExcutor();
-	if (!IsValid(VFXExecutor))
-		VFXExecutor->ExecuteVFX(ProjectVFXTags::Character_Dodge_End,MakeDodgeVFXContext(Owner->GetActorLocation()));
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (IsValid(VFXExecutor))
+		VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_End,MakeDodgeVFXContext(Owner->GetActorLocation()));
 }
 
 

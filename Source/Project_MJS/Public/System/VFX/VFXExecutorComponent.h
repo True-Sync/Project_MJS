@@ -4,7 +4,7 @@
 #include "Components/ActorComponent.h"
 #include "GameplayTagContainer.h"
 #include "System/VFX/VFXTypes.h"
-#include "VFXExcutorComponent.generated.h"
+#include "VFXExecutorComponent.generated.h"
 
 class UCharacterVFXProfile;
 class UNiagaraComponent;
@@ -22,12 +22,12 @@ struct FVFXInstanceData
 };
 
 UCLASS(ClassGroup = (VFX), meta = (BlueprintSpawnableComponent))
-class PROJECT_MJS_API UVFXExcutorComponent : public UActorComponent
+class PROJECT_MJS_API UVFXExecutorComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
 public:
-	UVFXExcutorComponent();
+	UVFXExecutorComponent();
 	
 	UFUNCTION(BlueprintCallable, Category = "VFX")
 	FVFXHandle  ExecuteVFX(const FGameplayTag& Tag, const FVFXExecuteContext& Context);

@@ -1,16 +1,16 @@
-#include "System/VFX/VFXExcutorComponent.h"
+#include "System/VFX/VFXExecutorComponent.h"
 #include "GameFramework/Actor.h"
 #include "NiagaraFunctionLibrary.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "System/VFX/Data/CharacterVFXProfile.h"
 
-UVFXExcutorComponent::UVFXExcutorComponent()
+UVFXExecutorComponent::UVFXExecutorComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
-FVFXHandle UVFXExcutorComponent::ExecuteVFX(const FGameplayTag& Tag, const FVFXExecuteContext& Context)
+FVFXHandle UVFXExecutorComponent::ExecuteVFX(const FGameplayTag& Tag, const FVFXExecuteContext& Context)
 {
 	UE_LOG(LogTemp, Warning, TEXT("[VFX] ExecuteVFX 시작 | Tag: %s"),*Tag.ToString());
 	
@@ -46,7 +46,7 @@ FVFXHandle UVFXExcutorComponent::ExecuteVFX(const FGameplayTag& Tag, const FVFXE
 	
 	if (Definition->LifetimePolicy == EVFXLifetimePolicy::Persistent)
 	{
-		SpawnedComponent->OnSystemFinished.AddDynamic(this, &UVFXExcutorComponent::OnNiagaraFinished);
+		SpawnedComponent->OnSystemFinished.AddDynamic(this, &UVFXExecutorComponent::OnNiagaraFinished);
 		
 		const FVFXHandle NewHandle(FGuid::NewGuid());
 		FVFXInstanceData InstanceData;
@@ -72,7 +72,7 @@ FVFXHandle UVFXExcutorComponent::ExecuteVFX(const FGameplayTag& Tag, const FVFXE
 }
 
 
-UNiagaraComponent* UVFXExcutorComponent::SpawnNiagara(const FGameplayTag& Tag, const FVFXDefinition& ExecuteDefinition, const FVFXExecuteContext& Context)
+UNiagaraComponent* UVFXExecutorComponent::SpawnNiagara(const FGameplayTag& Tag, const FVFXDefinition& ExecuteDefinition, const FVFXExecuteContext& Context)
 {
 	const bool bAutoDestroy = ExecuteDefinition.LifetimePolicy == EVFXLifetimePolicy::OneShot;
 	
@@ -158,7 +158,7 @@ UNiagaraComponent* UVFXExcutorComponent::SpawnNiagara(const FGameplayTag& Tag, c
 	return SpawnedComponent;
 }
 
-void UVFXExcutorComponent::ApplyFloatParameters(UNiagaraComponent* NiagaraComponent, const FVFXDefinition& Definition,
+void UVFXExecutorComponent::ApplyFloatParameters(UNiagaraComponent* NiagaraComponent, const FVFXDefinition& Definition,
 	const FVFXExecuteContext& Context)
 {
 	if (!IsValid(NiagaraComponent))
@@ -181,7 +181,7 @@ void UVFXExcutorComponent::ApplyFloatParameters(UNiagaraComponent* NiagaraCompon
 // ================ Stop 판정 ===================
 
 
-bool UVFXExcutorComponent::StopVFX(const FVFXHandle& Handle)
+bool UVFXExecutorComponent::StopVFX(const FVFXHandle& Handle)
 {
 	if (!Handle.IsValid())
 		return false;
@@ -194,7 +194,7 @@ bool UVFXExcutorComponent::StopVFX(const FVFXHandle& Handle)
 	return true;
 }
 
-bool UVFXExcutorComponent::StopVFXImmediate(const FVFXHandle& Handle)
+bool UVFXExecutorComponent::StopVFXImmediate(const FVFXHandle& Handle)
 {
 	if (!Handle.IsValid())
 		return false;
@@ -208,14 +208,14 @@ bool UVFXExcutorComponent::StopVFXImmediate(const FVFXHandle& Handle)
 	
 	if (IsValid(NiagaraComponent))
 	{
-		NiagaraComponent->OnSystemFinished.RemoveDynamic(this, &UVFXExcutorComponent::OnNiagaraFinished);
+		NiagaraComponent->OnSystemFinished.RemoveDynamic(this, &UVFXExecutorComponent::OnNiagaraFinished);
 		NiagaraComponent->DeactivateImmediate();
 		NiagaraComponent->DestroyComponent();
 	}
 	return true;
 }
 
-void UVFXExcutorComponent::OnNiagaraFinished(UNiagaraComponent* FinishedComponent)
+void UVFXExecutorComponent::OnNiagaraFinished(UNiagaraComponent* FinishedComponent)
 {
 	if (!IsValid(FinishedComponent))
 		return;
@@ -229,7 +229,7 @@ void UVFXExcutorComponent::OnNiagaraFinished(UNiagaraComponent* FinishedComponen
 		}
 	}
 	
-	FinishedComponent->OnSystemFinished.RemoveDynamic(this, &UVFXExcutorComponent::OnNiagaraFinished);
+	FinishedComponent->OnSystemFinished.RemoveDynamic(this, &UVFXExecutorComponent::OnNiagaraFinished);
 	FinishedComponent->DestroyComponent();
 }
 

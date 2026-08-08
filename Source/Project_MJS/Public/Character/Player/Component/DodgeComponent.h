@@ -10,7 +10,7 @@
 
 class UCameraShakeBase;
 class UNiagaraSystem;
-class UVFXExcutorComponent;
+class UVFXExecutorComponent;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class PROJECT_MJS_API UDodgeComponent : public UActorComponent
@@ -29,12 +29,12 @@ public:
 	
 private:
 	// VFX	
-	UVFXExcutorComponent* ResolveVFXExcutor();
+	UVFXExecutorComponent* ResolveVFXExecutor();
 	FVFXExecuteContext MakeDodgeVFXContext(const FVector& DodgeDirection);
 	void StartDodgeOneShotVFX(const FVector& DodgeDirection);
 	void StartDodgeLoopVFX(const FVector& DodgeDirection);
 	void StopDodgeLoopVFX();
-	void FinishDodgeVFX();
+	void FinishDodgeVFX(); //끝날 때 실행될 VFX가 있다면 StopDodgeLoopVFX 대신 이거 사용.
 	
 
 private:
@@ -56,7 +56,7 @@ private:
 	TObjectPtr<UAnimMontage> JustDodgeMontage;
 	
 	UPROPERTY(Transient)
-	TObjectPtr<UVFXExcutorComponent> CachedVFXExecutor = nullptr;
+	TObjectPtr<UVFXExecutorComponent> CachedVFXExecutor = nullptr;
 	
 	UPROPERTY(Transient)
 	FVFXHandle DodgeLoopVFXHandle;
