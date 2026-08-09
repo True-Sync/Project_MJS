@@ -18,6 +18,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Engine/DamageEvents.h"
 #include "Engine/World.h"
+#include "Interaction/InteractionComponent.h"
 
 ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer)
 	: Super(ObjectInitializer.SetDefaultSubobjectClass<UPlayerMovementComponent>(ACharacter::CharacterMovementComponentName))
@@ -29,6 +30,7 @@ ACPlayerCharacter::ACPlayerCharacter(const FObjectInitializer& ObjectInitializer
 	AttackComponent = CreateDefaultSubobject<UAttackComponent>(TEXT("AttackComponent"));
 	SkillComponent = CreateDefaultSubobject<USkillComponent>(TEXT("SkillComponent"));
 	TargetingComponent = CreateDefaultSubobject<UTargetingComponent>(TEXT("TargetingComponent"));
+	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
 	CinematicActionComponent = CreateDefaultSubobject<UCinematicActionComponent>(TEXT("CinematicActionComponent"));
 	CinematicParticipantComponent = CreateDefaultSubobject<UCinematicParticipantComponent>(TEXT("CinematicParticipantComponent"));
 	HealthComponent = CreateDefaultSubobject<UHealthComponent>(TEXT("HealthComponent"));
