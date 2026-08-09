@@ -6,9 +6,12 @@
 #include "CPlayerController.generated.h"
 
 class ACameraRigActor;
+class ACommandBoxActor;
 class ACPlayerCharacter;
 class UInputAction;
 class UInputMappingContext;
+class UInteractionComponent;
+class UHousingPlacementComponent;
 class USkillDataAsset;
 class UTargetingComponent;
 class UUserWidget;
@@ -26,6 +29,8 @@ protected:
 	virtual void SetupInputComponent() override;
 
 public:
+	ACPlayerController();
+
 	FRotator GetCameraYawRotation() const;
 	ACameraRigActor* GetCameraRig() const { return CameraRig; }
 	ACameraRigActor* EnsureCameraRig();
@@ -36,6 +41,13 @@ public:
 	void RequestTogglePause();
 
 	void RequestResumeGame();
+	void OpenCommandBoxMenu(ACommandBoxActor* CommandBox);
+	void CloseCommandBoxMenu();
+	void RequestCommandBoxHousing();
+	void RequestCommandBoxCostume();
+	void RequestCommandBoxStageTravel();
+	bool IsCommandBoxMenuOpen() const { return bCommandBoxMenuOpen; }
+	UHousingPlacementComponent* GetHousingPlacementComponent() const { return HousingPlacementComponent; }
 
 private:
 	ACameraRigActor* SpawnCameraRig();
@@ -57,6 +69,7 @@ private:
 	void OnRangedHardTargetCanceled();
 	void OnClearHardTargetInput();
 	void OnPauseInput();
+	void OnInteractInput();
 
 	void HandleTargetingDisplayUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers);
 	void HandleTargetingDisplayCleared();
@@ -64,8 +77,10 @@ private:
 
 	ACPlayerCharacter* GetPlayerCharacter() const;
 	UTargetingComponent* GetPlayerTargetingComponent() const;
+	UInteractionComponent* GetPlayerInteractionComponent() const;
 	bool IsCinematicMoveInputLocked() const;
 	bool IsCinematicLookInputLocked() const;
+	bool IsModalGameplayInputLocked() const;
 	void SetGameplayPaused(bool bShouldPause);
 	void AddDefaultInputMappingContext();
 	void RemoveDefaultInputMappingContext();
@@ -110,6 +125,9 @@ private:
 	UPROPERTY(EditDefaultsOnly, Category = "Input|Pause")
 	TObjectPtr<UInputAction> IA_Pause;
 
+	UPROPERTY(EditDefaultsOnly, Category = "Input|Interaction")
+	TObjectPtr<UInputAction> IA_Interact;
+
 	UPROPERTY(EditDefaultsOnly, Category = "Skill")
 	TObjectPtr<USkillDataAsset> Skill1Data;
 
@@ -127,6 +145,14 @@ private:
 	// 현재 델리게이트를 바인딩해 둔 타겟팅 컴포넌트.
 	UPROPERTY(Transient)
 	TWeakObjectPtr<UTargetingComponent> BoundTargetingComponent;
+
+	UPROPERTY(Transient)
+	TWeakObjectPtr<ACommandBoxActor> ActiveCommandBox;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components|Housing", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHousingPlacementComponent> HousingPlacementComponent;
+
+	bool bCommandBoxMenuOpen = false;
 
 public:
 	UFUNCTION(BlueprintCallable, Category = "DevConsole")

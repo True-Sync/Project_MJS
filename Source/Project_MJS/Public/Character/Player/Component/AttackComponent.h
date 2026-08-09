@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "System/VFX/VFXTypes.h"
 #include "AttackComponent.generated.h"
 
+class UVFXExecutorComponent;
 class UAnimMontage;
 class UComboAttackDataAsset;
 
@@ -17,7 +19,13 @@ public:
 
 	void RequestAttack();
 	void SetComboWindowOpen(bool bOpen);
+	
+	UFUNCTION(BlueprintCallable, Category = "Combat|VFX")
+	void StartSwordTrail();
 
+	UFUNCTION(BlueprintCallable, Category = "Combat|VFX")
+	void EndSwordTrail();
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -26,7 +34,23 @@ private:
 	void PlayQueuedCombo();
 	bool HasNextCombo() const;
 	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	
+	
+	//VFX 
+	UVFXExecutorComponent* ResolveVFXExecutor();
+	FVFXExecuteContext MakeAttackVFXContext(const FVector AttackDirection);
+	void StartAttackOneShotVFX(const FVector& AttackDirection);
+	void StartAttackLoopVFX(const FVector& AttackDirection);
+	void StopAttackLoopVFX();
+	void FinishAttackVFX();
+	
 
+	UPROPERTY(Transient)
+	TObjectPtr<UVFXExecutorComponent> CachedVFXExecutor = nullptr;
+	
+	UPROPERTY(Transient)
+	FVFXHandle AttackLoopVFXHandle;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
 	TObjectPtr<UComboAttackDataAsset> DA_BasicComboAttack;
 	

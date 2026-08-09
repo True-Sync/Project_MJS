@@ -5,10 +5,12 @@
 #include "Character/SharedData/StaminaCostData.h"
 #include "Components/ActorComponent.h"
 #include "System/Combat/CombatTimeDilationSubsystem.h"
+#include "System/VFX/VFXTypes.h"
 #include "DodgeComponent.generated.h"
 
 class UCameraShakeBase;
 class UNiagaraSystem;
+class UVFXExecutorComponent;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class PROJECT_MJS_API UDodgeComponent : public UActorComponent
@@ -26,6 +28,16 @@ public:
 	bool ConsumeJustDodgeCounter();
 	
 private:
+	// VFX	
+	UVFXExecutorComponent* ResolveVFXExecutor();
+	FVFXExecuteContext MakeDodgeVFXContext(const FVector& DodgeDirection);
+	void StartDodgeOneShotVFX(const FVector& DodgeDirection);
+	void StartDodgeLoopVFX(const FVector& DodgeDirection);
+	void StopDodgeLoopVFX();
+	void FinishDodgeVFX(); //끝날 때 실행될 VFX가 있다면 StopDodgeLoopVFX 대신 이거 사용.
+	
+
+private:
 	void OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted);
 	void HandleJustDodgeSucceeded(AActor* AttackCauser);
 	void PlayJustDodgeCameraFeedback() const;
@@ -42,6 +54,12 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
 	TObjectPtr<UAnimMontage> JustDodgeMontage;
+	
+	UPROPERTY(Transient)
+	TObjectPtr<UVFXExecutorComponent> CachedVFXExecutor = nullptr;
+	
+	UPROPERTY(Transient)
+	FVFXHandle DodgeLoopVFXHandle;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Dodge|Resource")
 	FStaminaCostData DodgeStaminaCost;

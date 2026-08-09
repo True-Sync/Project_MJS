@@ -2,15 +2,24 @@
 
 #include "Blueprint/UserWidget.h"
 #include "Character/Player/CPlayerController.h"
+#include "UI/CommandBoxMenuWidget.h"
 #include "UI/GamePlayWidget.h"
+#include "UI/HousingMainWidget.h"
 #include "UI/PauseMenuWidget.h"
+#include "Housing/HousingPlacementComponent.h"
 
 void ACPlayerHUD::BeginPlay()
 {
 	Super::BeginPlay();
 
 	EnsureGamePlayWidget();
+	EnsureHousingMainWidget();
 	ValidateGamePlayWidgetConfiguration();
+}
+
+void ACPlayerHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACPlayerHUD::OnTargetingHUDUpdated(bool bShowCrosshair, const TArray<FTargetingHUDMarkerData>& Markers)
@@ -45,6 +54,25 @@ void ACPlayerHUD::HidePauseMenu()
 	if (PauseMenuWidget)
 	{
 		PauseMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+	}
+}
+
+UCommandBoxMenuWidget* ACPlayerHUD::ShowCommandBoxMenu()
+{
+	UCommandBoxMenuWidget* Widget = EnsureCommandBoxMenuWidget();
+	if (Widget)
+	{
+		Widget->SetVisibility(ESlateVisibility::Visible);
+	}
+
+	return Widget;
+}
+
+void ACPlayerHUD::HideCommandBoxMenu()
+{
+	if (CommandBoxMenuWidget)
+	{
+		CommandBoxMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
 	}
 }
 
@@ -97,6 +125,76 @@ UPauseMenuWidget* ACPlayerHUD::EnsurePauseMenuWidget()
 	return PauseMenuWidget;
 }
 
+UCommandBoxMenuWidget* ACPlayerHUD::EnsureCommandBoxMenuWidget()
+{
+	if (CommandBoxMenuWidget)
+	{
+		return CommandBoxMenuWidget;
+	}
+
+	if (!CommandBoxMenuWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD is missing CommandBoxMenuWidgetClass."));
+		return nullptr;
+	}
+
+	APlayerController* OwnerController = GetOwningPlayerController();
+	if (!OwnerController)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD could not find an owning player controller for CommandBoxMenuWidget."));
+		return nullptr;
+	}
+
+	CommandBoxMenuWidget = CreateWidget<UCommandBoxMenuWidget>(OwnerController, CommandBoxMenuWidgetClass);
+	if (!CommandBoxMenuWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD failed to create CommandBoxMenuWidget."));
+		return nullptr;
+	}
+
+	CommandBoxMenuWidget->OnHousingRequested.AddUObject(this, &ACPlayerHUD::HandleCommandBoxHousingRequested);
+	CommandBoxMenuWidget->OnCostumeRequested.AddUObject(this, &ACPlayerHUD::HandleCommandBoxCostumeRequested);
+	CommandBoxMenuWidget->OnStageTravelRequested.AddUObject(this, &ACPlayerHUD::HandleCommandBoxStageTravelRequested);
+	CommandBoxMenuWidget->OnCloseRequested.AddUObject(this, &ACPlayerHUD::HandleCommandBoxCloseRequested);
+	CommandBoxMenuWidget->AddToViewport(CommandBoxMenuZOrder);
+	CommandBoxMenuWidget->SetVisibility(ESlateVisibility::Collapsed);
+	return CommandBoxMenuWidget;
+}
+
+UHousingMainWidget* ACPlayerHUD::EnsureHousingMainWidget()
+{
+	if (HousingMainWidget)
+	{
+		return HousingMainWidget;
+	}
+
+	if (!HousingMainWidgetClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD is missing HousingMainWidgetClass."));
+		return nullptr;
+	}
+
+	APlayerController* OwnerController = GetOwningPlayerController();
+	if (!OwnerController)
+	{
+		return nullptr;
+	}
+
+	HousingMainWidget = CreateWidget<UHousingMainWidget>(OwnerController, HousingMainWidgetClass);
+	if (!HousingMainWidget)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("CPlayerHUD failed to create HousingMainWidget."));
+		return nullptr;
+	}
+
+	if (const ACPlayerController* PlayerController = Cast<ACPlayerController>(OwnerController))
+	{
+		HousingMainWidget->InitializeHousing(PlayerController->GetHousingPlacementComponent());
+	}
+	HousingMainWidget->AddToViewport(HousingMainWidgetZOrder);
+	return HousingMainWidget;
+}
+
 void ACPlayerHUD::ValidateGamePlayWidgetConfiguration() const
 {
 	if (!GamePlayWidgetClass)
@@ -133,4 +231,36 @@ void ACPlayerHUD::HandlePauseMenuResumeRequested()
 	}
 
 	PlayerController->RequestResumeGame();
+}
+
+void ACPlayerHUD::HandleCommandBoxHousingRequested()
+{
+	if (ACPlayerController* PlayerController = Cast<ACPlayerController>(GetOwningPlayerController()))
+	{
+		PlayerController->RequestCommandBoxHousing();
+	}
+}
+
+void ACPlayerHUD::HandleCommandBoxCostumeRequested()
+{
+	if (ACPlayerController* PlayerController = Cast<ACPlayerController>(GetOwningPlayerController()))
+	{
+		PlayerController->RequestCommandBoxCostume();
+	}
+}
+
+void ACPlayerHUD::HandleCommandBoxStageTravelRequested()
+{
+	if (ACPlayerController* PlayerController = Cast<ACPlayerController>(GetOwningPlayerController()))
+	{
+		PlayerController->RequestCommandBoxStageTravel();
+	}
+}
+
+void ACPlayerHUD::HandleCommandBoxCloseRequested()
+{
+	if (ACPlayerController* PlayerController = Cast<ACPlayerController>(GetOwningPlayerController()))
+	{
+		PlayerController->CloseCommandBoxMenu();
+	}
 }

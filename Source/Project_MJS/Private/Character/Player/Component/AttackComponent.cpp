@@ -6,12 +6,16 @@
 #include "Character/Player/Component/PlayerMovementComponent.h"
 #include "Character/Player/Component/TargetingComponent.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
+#include "IMediaCache.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "System/VFX/VFXExecutorComponent.h"
+#include "System/VFX/VFXGameplayTags.h"
 
 UAttackComponent::UAttackComponent()
 {
@@ -22,6 +26,20 @@ UAttackComponent::UAttackComponent()
 void UAttackComponent::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void UAttackComponent::StartSwordTrail()
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!IsValid(OwnerCharacter))
+		return;
+
+	StartAttackLoopVFX(OwnerCharacter->GetActorForwardVector());
+}
+
+void UAttackComponent::EndSwordTrail()
+{
+	StopAttackLoopVFX();
 }
 
 void UAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -133,7 +151,7 @@ bool UAttackComponent::PlayCombo(int32 ComboIndex)
 			}
 		}
 	}
-
+	
 	const float Duration = AnimInstance->Montage_Play(ComboEntry.Montage);
 	if (Duration <= 0.0f)
 	{
@@ -181,11 +199,88 @@ void UAttackComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
 		return;
 	}
 
+	StopAttackLoopVFX();
 	bIsAttacking = false;
 	bCanQueueCombo = false;
 	bComboQueued = false;
 	CurrentComboIndex = INDEX_NONE;
 	ActiveMontage = nullptr;
+}
+
+//--------------VFX------------------
+
+UVFXExecutorComponent* UAttackComponent::ResolveVFXExecutor()
+{
+	if (IsValid(CachedVFXExecutor))
+		return CachedVFXExecutor;
+	
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+		return nullptr;
+	
+	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExecutorComponent>();
+	return CachedVFXExecutor;
+}
+
+FVFXExecuteContext UAttackComponent::MakeAttackVFXContext(const FVector AttackDirection)
+{
+	FVFXExecuteContext Context;
+	
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!IsValid(OwnerCharacter))
+		return Context;
+	
+	USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh();
+	if (!IsValid(CharacterMesh))
+		return Context;
+	
+	
+	Context.SourceActor = OwnerCharacter;
+	Context.TargetActor = OwnerCharacter;
+	Context.WorldTransform = OwnerCharacter->GetActorTransform();
+	Context.AttachComponent = CharacterMesh;
+	Context.Direction = AttackDirection.GetSafeNormal();
+
+	return Context;
+}
+
+void UAttackComponent::StartAttackOneShotVFX(const FVector& AttackDirection)
+{
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+	{
+		VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_Start,MakeAttackVFXContext(AttackDirection));
+	}
+}
+
+void UAttackComponent::StartAttackLoopVFX(const FVector& AttackDirection)
+{
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (!IsValid(VFXExecutor))
+		return;
+	
+	StopAttackLoopVFX(); //기존 Loop 정리
+	AttackLoopVFXHandle = VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_Loop, MakeAttackVFXContext(AttackDirection));
+}
+
+void UAttackComponent::StopAttackLoopVFX()
+{
+	if (!AttackLoopVFXHandle.IsValid())
+		return;
+	
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+		VFXExecutor->StopVFX(AttackLoopVFXHandle);
+	
+	AttackLoopVFXHandle.Reset();
+}
+
+void UAttackComponent::FinishAttackVFX()
+{
+	StopAttackLoopVFX();
+	AActor* Owner = GetOwner();
+	
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (IsValid(VFXExecutor))
+		VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_End,MakeAttackVFXContext(Owner->GetActorForwardVector()));
 }
 
 // =============== 공격 판정 용 함수 구현부 ==================
