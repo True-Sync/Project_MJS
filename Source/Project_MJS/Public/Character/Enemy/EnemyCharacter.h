@@ -10,6 +10,7 @@ class UHealthComponent;
 class UEnemyFSMComponent;
 class UEnemyActionDataAsset;
 class UWidgetComponent;
+class UMotionWarpingComponent;
 
 UCLASS()
 class PROJECT_MJS_API AEnemyCharacter : public ACharacter, public ITargetableInterface
@@ -26,6 +27,9 @@ public:
 	// ===== FSM (AI 상태 제어기) =====
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Component")
 	TObjectPtr<UEnemyFSMComponent> FSMComponent;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Component")
+	TObjectPtr<UMotionWarpingComponent> MotionWarpingComponent;
 
 	// ===== 데이터 에셋 반환 (FSM 등 외부에서 접근 용이하도록) =====
 	UFUNCTION(BlueprintCallable, Category = "AI|Data")

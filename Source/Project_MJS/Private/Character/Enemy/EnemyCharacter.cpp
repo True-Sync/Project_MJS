@@ -14,6 +14,7 @@
 #include "Components/WidgetComponent.h"
 #include "UI/PlayerStatusLayerWidget.h"
 #include "Engine/DamageEvents.h"
+#include "MotionWarpingComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/DamageType.h"
 
@@ -30,6 +31,8 @@ AEnemyCharacter::AEnemyCharacter()
 	HealthComponent->ConfigureDeathBehavior(false, true);
 
 	FSMComponent = CreateDefaultSubobject<UEnemyFSMComponent>(TEXT("FSMComponent"));
+	
+	MotionWarpingComponent = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarpingComponent"));
 	
 	if (GetCharacterMovement())
 	{

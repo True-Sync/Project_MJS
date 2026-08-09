@@ -24,7 +24,8 @@ public class Project_MJS : ModuleRules
 			"AIModule",
 			"UMG",
 			"GameplayTags",
-			"TrueSyncRuntimeLoading"
+			"TrueSyncRuntimeLoading",
+			"MotionWarping"
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "AnimGraphRuntime", "FMODStudioEditor" });

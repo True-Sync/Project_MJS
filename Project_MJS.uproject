@@ -1,70 +1,74 @@
 {
-  "FileVersion": 3,
-  "EngineAssociation": "5.8",
-  "Category": "",
-  "Description": "",
-  "Modules": [
-    {
-      "Name": "Project_MJS",
-      "Type": "Runtime",
-      "LoadingPhase": "Default",
-      "AdditionalDependencies": [
-        "Engine"
-      ]
-    }
-  ],
-  "Plugins": [
-    {
-      "Name": "TrueSyncEndfieldShading",
-      "Enabled": true
-    },
-    {
-      "Name": "TrueSyncRuntimeLoading",
-      "Enabled": true
-    },
-    {
-      "Name": "FMODStudio",
-      "Enabled": true
-    },
-    {
-      "Name": "FMODStudioNiagara",
-      "Enabled": true
-    },
-    {
-      "Name": "ModelingToolsEditorMode",
-      "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
-    },
-    {
-      "Name": "StateTree",
-      "Enabled": true
-    },
-    {
-      "Name": "GameplayStateTree",
-      "Enabled": true
-    },
-    {
-      "Name": "PythonScriptPlugin",
-      "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
-    },
-    {
-      "Name": "EditorScriptingUtilities",
-      "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
-    },
-    {
-      "Name": "LmStudioGraphExporter",
-      "Enabled": true,
-      "TargetAllowList": [
-        "Editor"
-      ]
-    }
-  ]
+	"FileVersion": 3,
+	"EngineAssociation": "5.8",
+	"Category": "",
+	"Description": "",
+	"Modules": [
+		{
+			"Name": "Project_MJS",
+			"Type": "Runtime",
+			"LoadingPhase": "Default",
+			"AdditionalDependencies": [
+				"Engine"
+			]
+		}
+	],
+	"Plugins": [
+		{
+			"Name": "TrueSyncEndfieldShading",
+			"Enabled": true
+		},
+		{
+			"Name": "TrueSyncRuntimeLoading",
+			"Enabled": true
+		},
+		{
+			"Name": "FMODStudio",
+			"Enabled": true
+		},
+		{
+			"Name": "FMODStudioNiagara",
+			"Enabled": true
+		},
+		{
+			"Name": "ModelingToolsEditorMode",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "StateTree",
+			"Enabled": true
+		},
+		{
+			"Name": "GameplayStateTree",
+			"Enabled": true
+		},
+		{
+			"Name": "PythonScriptPlugin",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "EditorScriptingUtilities",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "LmStudioGraphExporter",
+			"Enabled": true,
+			"TargetAllowList": [
+				"Editor"
+			]
+		},
+		{
+			"Name": "MotionWarping",
+			"Enabled": true
+		}
+	]
 }

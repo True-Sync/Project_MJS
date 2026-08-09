@@ -6,6 +6,7 @@
 #include "Animation/AnimInstance.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Character/Enemy/GroupCombatSubsystem.h"
+#include "MotionWarpingComponent.h"
 
 UEnemyFSMComponent::UEnemyFSMComponent()
 {
@@ -164,6 +165,26 @@ void UEnemyFSMComponent::ChangeState(EEnemyState NewState)
 			}
 			
 			bIsPreparingDashAttack = false;
+			
+			// 모션 워핑 타겟 갱신
+			if (SelectedPattern.AttackType == EEnemyAttackType::Dash)
+			{
+				if (UMotionWarpingComponent* WarpingComp = OwnerCharacter->FindComponentByClass<UMotionWarpingComponent>())
+				{
+					if (TargetPlayer)
+					{
+						FVector PlayerLoc = TargetPlayer->GetActorLocation();
+						FVector EnemyLoc = OwnerCharacter->GetActorLocation();
+						
+						FVector DirToPlayer = (EnemyLoc - PlayerLoc).GetSafeNormal();
+						
+						FVector StopLocation = PlayerLoc + (DirToPlayer * 60.0f);
+						StopLocation.Z = EnemyLoc.Z;
+						
+						WarpingComp->AddOrUpdateWarpTargetFromLocation(FName("DashTarget"), StopLocation);
+					}
+				}
+			}
 
 			if (SelectedPattern.AttackMontage)
 			{
@@ -289,17 +310,18 @@ void UEnemyFSMComponent::UpdateApproach()
 		return;
 	}
 
-	float AttackRange = OwnerCharacter->GetEnemyData()->AttackRange;
+	float CurrentAttackRange = bIsPreparingDashAttack ? Data->DashAttackThreshold : Data->AttackRange;
+	
 	float DistanceToPlayer = FVector::Dist(OwnerCharacter->GetActorLocation(), TargetPlayer->GetActorLocation());
 	
-	if (DistanceToPlayer > Data->AttackRange && ApproachTime > Data->ApproachTimeout)
+	if (DistanceToPlayer > CurrentAttackRange && ApproachTime > Data->ApproachTimeout)
 	{
 		TokenCooldownTime = Data->YieldTokenCooldown; 
 		ChangeState(EEnemyState::Circling);
 		return;
 	}
 
-	if (DistanceToPlayer <= Data->AttackRange)
+	if (DistanceToPlayer <= CurrentAttackRange)
 	{
 		OwnerAIController->StopMovement();
 		ChangeState(EEnemyState::Attack_Telegraph);
