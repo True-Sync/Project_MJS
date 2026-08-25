@@ -67,6 +67,52 @@ Plugins/**/Binaries/**/*.pdb
 !Plugins/FMODStudio/Binaries/Win64/fmodstudioL_vc.lib
 !Plugins/FMODStudio/Binaries/Win64/fmod_haptics.dll
 !Plugins/FMODStudio/Binaries/Win64/resonanceaudio.dll
+!Plugins/FMODStudio/Binaries/Android/
+!Plugins/FMODStudio/Binaries/Android/fmod.jar
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/libfmod.so
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/libfmodL.so
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/libfmodstudio.so
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/libfmodstudioL.so
+!Plugins/FMODStudio/Binaries/Android/arm64-v8a/libresonanceaudio.so
+!Plugins/FMODStudio/Binaries/Android/quest/
+!Plugins/FMODStudio/Binaries/Android/quest/libfmod_haptics.so
+!Plugins/FMODStudio/Binaries/Android/x86_64/
+!Plugins/FMODStudio/Binaries/Android/x86_64/libfmod.so
+!Plugins/FMODStudio/Binaries/Android/x86_64/libfmodL.so
+!Plugins/FMODStudio/Binaries/Android/x86_64/libfmodstudio.so
+!Plugins/FMODStudio/Binaries/Android/x86_64/libfmodstudioL.so
+!Plugins/FMODStudio/Binaries/Android/x86_64/libresonanceaudio.so
+!Plugins/FMODStudio/Binaries/Linux/
+!Plugins/FMODStudio/Binaries/Linux/libfmod.so
+!Plugins/FMODStudio/Binaries/Linux/libfmodL.so
+!Plugins/FMODStudio/Binaries/Linux/libfmod_haptics.so
+!Plugins/FMODStudio/Binaries/Linux/libfmodstudio.so
+!Plugins/FMODStudio/Binaries/Linux/libfmodstudioL.so
+!Plugins/FMODStudio/Binaries/Linux/libresonanceaudio.so
+!Plugins/FMODStudio/Binaries/Mac/
+!Plugins/FMODStudio/Binaries/Mac/libfmod.dylib
+!Plugins/FMODStudio/Binaries/Mac/libfmodL.dylib
+!Plugins/FMODStudio/Binaries/Mac/libfmod_haptics.dylib
+!Plugins/FMODStudio/Binaries/Mac/libfmodstudio.dylib
+!Plugins/FMODStudio/Binaries/Mac/libfmodstudioL.dylib
+!Plugins/FMODStudio/Binaries/Mac/resonanceaudio.dylib
+!Plugins/FMODStudio/Binaries/IOS/
+!Plugins/FMODStudio/Binaries/IOS/libfmod_iphoneos.a
+!Plugins/FMODStudio/Binaries/IOS/libfmodL_iphoneos.a
+!Plugins/FMODStudio/Binaries/IOS/libfmodstudio_iphoneos.a
+!Plugins/FMODStudio/Binaries/IOS/libfmodstudioL_iphoneos.a
+!Plugins/FMODStudio/Binaries/IOS/libresonanceaudio.a
+!Plugins/FMODStudio/Binaries/TVOS/
+!Plugins/FMODStudio/Binaries/TVOS/libfmod_appletvos.a
+!Plugins/FMODStudio/Binaries/TVOS/libfmodL_appletvos.a
+!Plugins/FMODStudio/Binaries/TVOS/libfmodstudio_appletvos.a
+!Plugins/FMODStudio/Binaries/TVOS/libfmodstudioL_appletvos.a
+
+# Precompiled editor modules are engine-build artifacts, not FMOD redistributables.
+Plugins/FMODStudio/Binaries/*/UnrealEditor.modules
+Plugins/FMODStudio/Binaries/Linux/libUnrealEditor-*
+Plugins/FMODStudio/Binaries/Mac/libUnrealEditor-*
 
 
 # Builds

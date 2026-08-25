@@ -62,7 +62,7 @@ enum class ESoundBGMState : uint8
 ================================================================================================
 
 
-	이런식으로 사용해주세용.(동후니 태허니 화이또) - 용석이가
+	이런식으로 사용해주셔요
 */
 UCLASS()
 class PROJECT_MJS_API USoundManagerSubsystem : public UGameInstanceSubsystem
