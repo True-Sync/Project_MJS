@@ -1,8 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Subsystems/WorldSubsystem.h"
 #include "Cinematic/CinematicTypes.h"
+#include "Cinematic/Director/CinematicParticipantCoordinator.h"
+#include "Cinematic/Director/CinematicPostActionExecutor.h"
+#include "Subsystems/WorldSubsystem.h"
 #include "CinematicDirectorSubsystem.generated.h"
 
 class ALevelSequenceActor;
@@ -33,30 +35,21 @@ public:
 
 	const FCinematicPlaybackContext& GetActiveContext() const { return ActiveContext; }
 
+	// ===== Debug / DevConsole용 상태 요약 =====
+	virtual void Deinitialize() override;
+
+	UFUNCTION(BlueprintPure, Category = "Cinematic|Debug")
+	FString GetCinematicStatusSummary() const;
+
 private:
 	UFUNCTION()
 	void HandleSequenceFinished();
 
 	void FinishCinematic(bool bStopPlayback);
-	void RestoreViewTarget();
-
 	bool ShouldAllowPlaybackForNetworkPolicy(const FCinematicPlaybackRequest& Request) const;
 	APlayerController* ResolvePlayerController(const FCinematicPlaybackRequest& Request) const;
 	void BuildActiveContext(const FCinematicPlaybackRequest& Request, const FTransform& AnchorWorldTransform, bool bAppliedDynamicTransform);
-	void ApplyBindingOverrides(const FCinematicPlaybackRequest& Request) const;
-	void ApplyDynamicTransform(const FCinematicPlaybackRequest& Request, FTransform& OutAnchorWorldTransform, bool& bOutAppliedDynamicTransform) const;
-	FTransform ResolveDynamicAnchorTransform(const FCinematicPlaybackRequest& Request) const;
-	FTransform ResolveActorOrSocketTransform(const AActor* Actor, FName SocketName) const;
-	AActor* ResolveAnchorActor(const FCinematicPlaybackRequest& Request) const;
-	FRotator ResolveRotation(const FCinematicPlaybackRequest& Request, const FTransform& AnchorTransform) const;
-	FRotator NormalizeCinematicRotation(const FRotator& Rotation, bool bUseYawOnly) const;
-	void DrawDebugAnchorTransform(const FCinematicPlaybackRequest& Request, const FTransform& AnchorWorldTransform) const;
-
-	void CollectParticipants(const FCinematicPlaybackRequest& Request);
-	void AddActorParticipants(AActor* Actor);
-	void AddParticipantObject(UObject* Object);
-	void NotifyParticipantsStarted();
-	void NotifyParticipantsEnded();
+	void RestoreViewTarget();
 
 	UPROPERTY(Transient)
 	TObjectPtr<ULevelSequencePlayer> ActiveSequencePlayer = nullptr;
@@ -71,11 +64,18 @@ private:
 	TObjectPtr<AActor> PreviousViewTarget = nullptr;
 
 	UPROPERTY(Transient)
-	TArray<TObjectPtr<UObject>> ActiveParticipants;
+	FCinematicPlaybackContext ActiveContext;
 
 	UPROPERTY(Transient)
-	FCinematicPlaybackContext ActiveContext;
+	FCinematicParticipantCoordinator ParticipantCoordinator;
+
+	UPROPERTY(Transient)
+	FCinematicPostActionExecutor PostActionExecutor;
 
 	float ActiveBlendOutTime = 0.15f;
 	bool bShouldRestoreViewTarget = true;
+	bool bIsFinishing = false;
+
+	void ExecutePlaybackLevelLoad();
+	void ExecutePendingPostAction();
 };

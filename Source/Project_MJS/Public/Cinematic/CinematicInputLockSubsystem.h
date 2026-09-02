@@ -39,6 +39,7 @@ public:
 
 	int32 AcquireInputLock(APlayerController* PlayerController, bool bLockMoveInput, bool bLockLookInput, bool bLockGameplayInput);
 	void ReleaseInputLock(int32 LockHandle);
+	void ReleaseAllInputLocksForPlayer(APlayerController* PlayerController);
 
 	bool IsMoveInputLocked(const APlayerController* PlayerController) const;
 	bool IsLookInputLocked(const APlayerController* PlayerController) const;

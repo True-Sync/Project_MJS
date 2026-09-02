@@ -12,7 +12,6 @@ ACameraRigActor::ACameraRigActor()
 	SpringArm = CreateDefaultSubobject<USpringArmComponent>(TEXT("SpringArm"));
 	RootComponent = SpringArm;
 	
-	SpringArm->TargetArmLength = 480.0f;
 	SpringArm->SocketOffset = FVector(0.0f, 0.0f, 0.0f);
 	SpringArm->bUsePawnControlRotation = false;
 	SpringArm->bDoCollisionTest = true;
@@ -34,12 +33,6 @@ ACameraRigActor::ACameraRigActor()
 	CameraDirectingComp->Initialize(Camera);
 }
 
-void ACameraRigActor::BeginPlay()
-{
-	Super::BeginPlay();
-
-}
-
 void ACameraRigActor::SetCameraTarget(AActor* NewTarget)
 {
 	if (CameraMoveComp)
@@ -51,6 +44,19 @@ void ACameraRigActor::SetCameraTarget(AActor* NewTarget)
 AActor* ACameraRigActor::GetCurrentTarget() const
 {
 	return CameraMoveComp ? CameraMoveComp->GetCurrentTarget() : nullptr;
+}
+
+void ACameraRigActor::SetFocusTarget(AActor* NewFocusTarget)
+{
+	if (CameraMoveComp)
+	{
+		CameraMoveComp->SetFocusTarget(NewFocusTarget);
+	}
+}
+
+AActor* ACameraRigActor::GetFocusTarget() const
+{
+	return CameraMoveComp ? CameraMoveComp->GetFocusTarget() : nullptr;
 }
 
 void ACameraRigActor::AddLookInput(const FVector2D& LookInput)

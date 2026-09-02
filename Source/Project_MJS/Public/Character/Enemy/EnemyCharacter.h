@@ -1,63 +1,78 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Character/Shared/TargetableInterface.h"
 #include "GameFramework/Character.h"
 #include "EnemyCharacter.generated.h"
 
-class UAnimMontage;
-
+class USceneComponent;
+class UHealthComponent;
+class UEnemyFSMComponent;
+class UEnemyActionDataAsset;
 UCLASS()
-class PROJECT_MJS_API AEnemyCharacter : public ACharacter
+class PROJECT_MJS_API AEnemyCharacter : public ACharacter, public ITargetableInterface
 {
 	GENERATED_BODY()
 
 public:
 	AEnemyCharacter();
-	
+
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	virtual FVector GetTargetPointLocation_Implementation() const override;
+	UHealthComponent* GetHealthComponent() const { return HealthComponent; }
+
+	// ===== FSM (AI 상태 제어기) =====
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "AI|Component")
+	TObjectPtr<UEnemyFSMComponent> FSMComponent;
+
+	// ===== 데이터 에셋 반환 (FSM 등 외부에서 접근 용이하도록) =====
+	UFUNCTION(BlueprintCallable, Category = "AI|Data")
+	UEnemyActionDataAsset* GetEnemyData() const { return EnemyDataAsset; }
+	
+	virtual void Tick(float DeltaTime) override;
+	// ===== 타격 판정 제어 함수 =====
+	void StartWeaponTrace();
+	void StopWeaponTrace();
+	
 
 protected:
+	virtual void OnConstruction(const FTransform& Transform) override;
 	virtual void BeginPlay() override;
 
-	// 넉백으로 밀려나는 힘의 크기
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat")
-	float HitBackForce = 1300.0f;
+	// ===== 데이터 주도 설계 (Data-Driven) =====
+	// 하드코딩된 수치들을 제거하고, 데이터 에셋 하나로 바리에이션을 관리합니다.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "AI|Data")
+	TObjectPtr<UEnemyActionDataAsset> EnemyDataAsset;
 
-	// === 방향별 피격 애니메이션 몽타주 ===
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
-	TObjectPtr<UAnimMontage> HitMontageFront;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
-	TObjectPtr<UAnimMontage> HitMontageBack;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
-	TObjectPtr<UAnimMontage> HitMontageLeft;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Animation")
-	TObjectPtr<UAnimMontage> HitMontageRight;
+	// ===== 강인도 시스템 내부 상태 =====
+	float CurrentPoise = 100.0f;
+	bool bIsGroggy = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Weapon")
+	float WeaponTraceRadius = 25.0f;
 
 private:
-	// 넉백이 끝난 후 상태를 복구하는 함수
 	void ResetHitState();
+	void ClearHitFlash();
+	void RecoverPoise();
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Component|Combat", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UHealthComponent> HealthComponent;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<USceneComponent> TargetPointComponent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Targeting", meta = (AllowPrivateAccess = "true"))
+	float TargetPointHeight = 55.0f;
 
 	FTimerHandle HitRecoveryTimerHandle;
-	bool bIsHitBacking = false;
-	
-protected:
-	// === 피격 피드백 (머티리얼 오버레이) ===
-	
-	// 에디터에서 할당할 하얗게 번쩍이는 머티리얼
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
-	UMaterialInterface* HitFlashMaterial;
-
-	// 번쩍임이 유지되는 시간 (보통 0.05초 ~ 0.1초가 가장 타격감이 좋습니다)
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Feedback")
-	float HitFlashDuration = 0.1f;
-
-private:
-	// 머티리얼 복구를 위한 타이머 핸들
 	FTimerHandle HitFlashTimerHandle;
+	FTimerHandle PoiseRecoveryTimerHandle;
 
-	// 번쩍임 효과를 지우는 함수
-	void ClearHitFlash();
+	bool bIsHitBacking = false;
+
+	void WeaponTraceTick();
+	bool bIsWeaponTracing = false;
+	UPROPERTY()
+	TArray<AActor*> HitActors;
 };

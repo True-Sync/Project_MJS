@@ -2,8 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "System/VFX/VFXTypes.h"
 #include "AttackComponent.generated.h"
 
+class UVFXExecutorComponent;
 class UAnimMontage;
 class UComboAttackDataAsset;
 
@@ -17,7 +19,13 @@ public:
 
 	void RequestAttack();
 	void SetComboWindowOpen(bool bOpen);
+	
+	UFUNCTION(BlueprintCallable, Category = "Combat|VFX")
+	void StartSwordTrail();
 
+	UFUNCTION(BlueprintCallable, Category = "Combat|VFX")
+	void EndSwordTrail();
+	
 protected:
 	virtual void BeginPlay() override;
 
@@ -26,7 +34,23 @@ private:
 	void PlayQueuedCombo();
 	bool HasNextCombo() const;
 	void OnAttackMontageEnded(UAnimMontage* Montage, bool bInterrupted);
+	
+	
+	//VFX 
+	UVFXExecutorComponent* ResolveVFXExecutor();
+	FVFXExecuteContext MakeAttackVFXContext(const FVector AttackDirection);
+	void StartAttackOneShotVFX(const FVector& AttackDirection);
+	void StartAttackLoopVFX(const FVector& AttackDirection);
+	void StopAttackLoopVFX();
+	void FinishAttackVFX();
+	
 
+	UPROPERTY(Transient)
+	TObjectPtr<UVFXExecutorComponent> CachedVFXExecutor = nullptr;
+	
+	UPROPERTY(Transient)
+	FVFXHandle AttackLoopVFXHandle;
+	
 	UPROPERTY(EditDefaultsOnly, Category = "Montage")
 	TObjectPtr<UComboAttackDataAsset> DA_BasicComboAttack;
 	
@@ -51,6 +75,15 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 	
 	float GetCurrentKnockbackForce() const { return CurrentKnockbackForce; }
+
+	// ===== Debug / DevConsole용 상태 조회 =====
+	bool IsAttacking() const { return bIsAttacking; }
+	int32 GetCurrentComboIndex() const { return CurrentComboIndex; }
+	bool CanQueueCombo() const { return bCanQueueCombo; }
+	bool IsComboQueued() const { return bComboQueued; }
+
+	bool IsWeaponAttacking() const { return bIsWeaponAttacking; }
+	bool IsKickAttacking() const { return bIsKickAttacking; }
 	
 	// 노티파이 상태에서 호출할 공격 판정 시작/종료 함수
 	UFUNCTION(BlueprintCallable, Category = "Combat")
@@ -64,9 +97,11 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Combat")
 	void EndKickAttack();
+
+private:
 	
 	// 이전에 이미 타격한 대상을 중복 타격하지 않기 위한 리스트
-	TArray<AActor*> HitActors;
+	TSet<TWeakObjectPtr<AActor>> HitActors;
 
 	
 protected:

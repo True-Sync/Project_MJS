@@ -1,7 +1,12 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Logging/LogMacros.h"
+#include "UObject/ObjectPtr.h"
 #include "CinematicTypes.generated.h"
+
+// 전용 로그 카테고리: 시네마틱 시스템 전체에서 사용
+DECLARE_LOG_CATEGORY_EXTERN(LogCinematicSystem, Log, All);
 
 class AActor;
 class ALevelSequenceActor;
@@ -70,6 +75,22 @@ enum class ECinematicNetworkPolicy : uint8
 	AnyNetMode UMETA(DisplayName = "Any Net Mode")
 };
 
+/* ====================================================================================================
+ 2.5 ECinematicParticipantScope
+	시네마틱 참가자(ICinematicParticipant)를 어떻게 수집할지 결정한다. 
+	기존 bAffectAllParticipants 대신 이 옵션을 사용해서 성능과 안정성을 높인다.
+ */
+UENUM(BlueprintType)
+enum class ECinematicParticipantScope : uint8
+{
+	// InstigatorActor, SubjectActor, AdditionalParticipants에 명시된 대상만 수집.
+	ExplicitOnly UMETA(DisplayName = "Explicit Only"),
+
+	// 월드 내 모든 ICinematicParticipant를 스캔해서 수집 (기존 bAffectAllParticipants == true 동작).
+	// 대규모 맵에서 오버헤드가 크므로 필요할 때만 사용 권장.
+	AllInWorld UMETA(DisplayName = "All In World")
+};
+
 
 /* ====================================================================================================
  3. FCinematicBindingOverride 
@@ -95,9 +116,83 @@ struct PROJECT_MJS_API FCinematicBindingOverride
 };
 
 /* ====================================================================================================
+ 3.5 ECinematicPreset (선택적 가이드용)
+	FCinematicPlaybackRequest의 여러 옵션을 어떤 조합으로 설정해야 하는지 안내하는 프리셋 개념. 
+	별도 필드로 강제하지 않고, 사용 예시로만 제공한다. 실제 값은 아래 각 항목에서 명시한다.
+ */
+UENUM(BlueprintType)
+enum class ECinematicPreset : uint8
+{
+	// 스킬/궁극기 컷신: 플레이어 중심, 짧은 시간, 기존 시네마틱과 충돌하면 무시하는 것이 안전.
+	SkillCutscene UMETA(DisplayName = "Skill Cutscene"),
+
+	// 로컬 이벤트용: 특정 액터만 영향 받고, 다른 컷신과 겹칠 때 충돌 방지 우선.
+	LocalEvent UMETA(DisplayName = "Local Event"),
+
+	// 전역 컷신/스토리 시네마틱: 전체 참가자 수집, 기존 컷신 중단 허용, 카메라 복구 필수.
+	GlobalCinematic UMETA(DisplayName = "Global Cinematic")
+};
+
+
+/* ====================================================================================================
+ 3.8 FCinematicPostActionConfig
+	시네마틱 종료 후 수행할 액션 설정. 처음에는 레벨 로딩만 지원하고, 추후 필요하면 같은 구조체에 옵션 추가.
+*/
+USTRUCT(BlueprintType)
+struct PROJECT_MJS_API FCinematicPostActionConfig
+{
+	GENERATED_BODY()
+
+	// 시퀀스 종료 후 지정된 레벨로 이동할지 결정.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction")
+	bool bLoadLevelOnFinish = false;
+
+	// 이동할 레벨 경로. 예: "/Game/Maps/NextChapter" 또는 맵 에셋 레퍼런스 이름.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (EditCondition = "bLoadLevelOnFinish || bLoadLevelDuringPlayback"))
+	FName LevelName;
+
+	// true면 현재 월드에 등록된 스트리밍 레벨을 비동기로 로드/표시하고, false면 OpenLevel로 맵을 전환.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (EditCondition = "bLoadLevelOnFinish || bLoadLevelDuringPlayback"))
+	bool bAsyncLoad = true;
+
+	// 시퀀스 종료 후 레벨 로딩 전 지연 시간. 컷신 종료 연출과 로딩 시작 사이 여백용.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction", meta = (ClampMin = "0.0", EditCondition = "bLoadLevelOnFinish"))
+	float DelayBeforeLoad = 0.0f;
+
+	// 시퀀스가 아직 재생 중일 때도 레벨 로딩을 시작할지 결정.
+	// true면 컷신이 끝나기 전에 다음 스트리밍 레벨의 로드/표시를 요청할 수 있음.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback")
+	bool bLoadLevelDuringPlayback = false;
+
+	// 시퀀스 재생 시작 후 몇 초에 레벨 로딩을 트리거할지 결정.
+	// 0.0f면 컷신 시작과 동시에 로딩 시작, 양수면 해당 시간 지점에 로딩 시작.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback",
+		meta = (ClampMin = "0.0", EditCondition = "bLoadLevelDuringPlayback"))
+	float LoadLevelTriggerTime = 0.0f;
+
+	// 레벨 로딩 직전에 현재 시네마틱을 강제로 정지할지 결정.
+	// true면 로딩 전에 컷신을 멈추고 정리, false면 컷신은 그대로 재생하면서 로딩만 병렬로 진행.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction|During Playback",
+		meta = (EditCondition = "bLoadLevelDuringPlayback"))
+	bool bStopCinematicBeforeLoad = false;
+};
+
+/* ====================================================================================================
 4. FCinematicPlaybackRequest (좀 뭔가 많다.)
 	시네마틱 재생을 시작할 때 요청자에서 DirectorSubsystem으로 전달하는 데이터. 
 	스킬, 궁극기, 일반 컷신 트리거가 모두 이 구조체 하나로 재생을 요청한다.
+
+	[ECinematicPreset별 권장 설정 예시]
+	- SkillCutscene:
+	  - ParticipantScope = ExplicitOnly (또는 필요한 경우 AllInWorld)
+	  - bStopPreviousCinematic = false (충돌 시 스킬 컷신은 실패하는 것이 안전)
+	  - AnchorMode = InstigatorToSubject 또는 SubjectActor 등 동적 원점 사용 권장
+	- LocalEvent:
+	  - ParticipantScope = ExplicitOnly
+	  - bStopPreviousCinematic = false
+	- GlobalCinematic:
+	  - ParticipantScope = AllInWorld
+	  - bStopPreviousCinematic = true (스토리 컷신은 우선)
 */
 USTRUCT(BlueprintType)
 struct PROJECT_MJS_API FCinematicPlaybackRequest
@@ -128,17 +223,19 @@ struct PROJECT_MJS_API FCinematicPlaybackRequest
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|Binding", meta = (TitleProperty = "BindingTag"))
 	TArray<FCinematicBindingOverride> BindingOverrides;
 
-	// 4.7 true면 월드 안의 모든 CinematicParticipant를 수집. false면 Instigator/Subject/AdditionalParticipants에 명시된 대상만 반응.
+	// 4.7 시네마틱 참가자(ICinematicParticipant) 수집 범위. 
+	// 기본값은 ExplicitOnly: 불필요한 전역 스캔을 피하고 충돌 위험을 줄인다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic")
-	bool bAffectAllParticipants = true;
+	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
 
 	// 4.8 시네마틱 종료 뒤 이전 카메라 ViewTarget으로 복구할지 결정.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic")
 	bool bRestoreViewTarget = true;
 
 	// 4.9 이미 다른 시네마틱이 재생 중일 때 기존 재생을 중단하고 새 요청을 시작할지 결정.
+	// 기본값은 false로 변경: 의도치 않은 컷신 덮어쓰기를 방지한다. 전역 스토리 컷신 등에서는 true를 명시.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic")
-	bool bStopPreviousCinematic = true;
+	bool bStopPreviousCinematic = false;
 
 	// 4.10 네트워크 환경에서 이 시네마틱을 어느 쪽에서 재생할지 결정. 기본값은 로컬 전용으로, 전용 서버에서는 재생하지 않는다.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|Network")
@@ -195,6 +292,10 @@ struct PROJECT_MJS_API FCinematicPlaybackRequest
 	// 4.23 앵커 디버그 좌표축 크기.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|Debug", meta = (ClampMin = "1.0", EditCondition = "bDrawDebugAnchor"))
 	float DebugDrawScale = 120.0f;
+
+	// 4.24 시네마틱 종료 후 수행할 액션 설정. 현재는 레벨 로딩만 지원하며 추후 확장 가능.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Cinematic|PostAction")
+	FCinematicPostActionConfig PostAction;
 };
 
 /* ====================================================================================================
@@ -227,9 +328,17 @@ struct PROJECT_MJS_API FCinematicPlaybackContext
 	UPROPERTY(BlueprintReadOnly, Category = "Cinematic")
 	TObjectPtr<ALevelSequenceActor> SequenceActor = nullptr;
 
-	// 이번 재생이 전체 참가자에게 영향을 주는지, 명시된 참가자에게만 영향을 주는지 표시.
+	// 이번 재생의 참가자 수집 범위 (ExplicitOnly / AllInWorld).
 	UPROPERTY(BlueprintReadOnly, Category = "Cinematic")
-	bool bAffectAllParticipants = false;
+	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
+
+	// 이번 재생에서 사용한 동적 원점 계산 방식.
+	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")
+	ECinematicAnchorMode AnchorMode = ECinematicAnchorMode::AuthoredWorld;
+
+	// 이번 재생에서 사용한 회전 기준.
+	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")
+	ECinematicRotationSource RotationSource = ECinematicRotationSource::AnchorTransform;
 
 	// Director가 계산한 최종 동적 시퀀스 원점. 스킬 판정, 추가 VFX, 디버그 표시가 같은 기준을 재사용할 때 참고.
 	UPROPERTY(BlueprintReadOnly, Category = "Cinematic|Dynamic Transform")

@@ -17,7 +17,7 @@ bool UCinematicActionComponent::PlayCinematic(ULevelSequence* Sequence, bool bAf
 	Request.Sequence = Sequence;
 	Request.InstigatorActor = GetOwner();
 	Request.SubjectActor = GetOwner();
-	Request.bAffectAllParticipants = bAffectAllParticipants;
+	Request.ParticipantScope = bAffectAllParticipants ? ECinematicParticipantScope::AllInWorld : ECinematicParticipantScope::ExplicitOnly;
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = FMath::Max(0.0f, BlendOutTime);
 
@@ -43,7 +43,7 @@ bool UCinematicActionComponent::PlayAnchoredCinematic(
 	Request.Sequence = Sequence;
 	Request.InstigatorActor = GetOwner();
 	Request.SubjectActor = GetOwner();
-	Request.bAffectAllParticipants = bAffectAllParticipants;
+	Request.ParticipantScope = bAffectAllParticipants ? ECinematicParticipantScope::AllInWorld : ECinematicParticipantScope::ExplicitOnly;
 	Request.bRestoreViewTarget = bRestoreViewTarget;
 	Request.BlendOutTime = FMath::Max(0.0f, BlendOutTime);
 	Request.AnchorMode = AnchorMode;
@@ -76,7 +76,7 @@ bool UCinematicActionComponent::SubmitCinematicRequest(FCinematicPlaybackRequest
 	UCinematicDirectorSubsystem* DirectorSubsystem = World ? World->GetSubsystem<UCinematicDirectorSubsystem>() : nullptr;
 	if (!DirectorSubsystem)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: CinematicDirectorSubsystem is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: CinematicDirectorSubsystem is missing."));
 		return false;
 	}
 
@@ -97,6 +97,24 @@ bool UCinematicActionComponent::SubmitCinematicRequest(FCinematicPlaybackRequest
 		{
 			Request.PlayerController = Cast<APlayerController>(OwnerPawn->GetController());
 		}
+	}
+
+	static const FName PlayerBindingTag(TEXT("Player"));
+
+	AActor* PlayerBindingActor = Request.InstigatorActor ? Request.InstigatorActor.Get() : Owner;
+
+	if (IsValid(PlayerBindingActor) && !Request.BindingOverrides.ContainsByPredicate(
+		[](const FCinematicBindingOverride& Override)
+		{
+			static const FName LocalPlayerBindingTag(TEXT("Player"));
+			return Override.BindingTag == LocalPlayerBindingTag;
+		}))
+	{
+		FCinematicBindingOverride PlayerBinding;
+		PlayerBinding.BindingTag = PlayerBindingTag;
+		PlayerBinding.Actors.Add(PlayerBindingActor);
+		PlayerBinding.bAllowBindingsFromAsset = false;
+		Request.BindingOverrides.Add(PlayerBinding);
 	}
 
 	Request.BlendOutTime = FMath::Max(0.0f, Request.BlendOutTime);

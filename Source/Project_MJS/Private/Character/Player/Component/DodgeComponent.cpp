@@ -1,19 +1,20 @@
 #include "Character/Player/Component/DodgeComponent.h"
 
+#include "TimerManager.h"
 #include "Animation/AnimInstance.h"
+#include "Camera/CameraDirectingComponent.h"
+#include "Camera/CameraDirectingComponentFinder.h"
 #include "Character/Player/CPlayerCharacter.h"
+#include "Character/SharedComponent/StaminaComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
+#include "System/VFX/VFXExecutorComponent.h"
+#include "System/VFX/VFXGameplayTags.h"
 
 UDodgeComponent::UDodgeComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
-}
-
-
-void UDodgeComponent::BeginPlay()
-{
-	Super::BeginPlay();
+	DodgeStaminaCost.StaminaCost = 20.0f;
 }
 
 bool UDodgeComponent::RequestDodge()
@@ -31,8 +32,30 @@ bool UDodgeComponent::RequestDodge()
 		return false;
 	}
 
+	UStaminaComponent* StaminaComponent = OwnerCharacter->FindComponentByClass<UStaminaComponent>();
+	if (!IsValid(StaminaComponent))
+	{
+		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: StaminaComponent is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
+		return false;
+	}
+
+	if (!StaminaComponent->CanConsumeStamina(DodgeStaminaCost))
+	{
+		UE_LOG(LogTemp, Log, TEXT("RequestDodge rejected: insufficient stamina. Current=%.1f Cost=%.1f"),
+			StaminaComponent->GetCurrentStamina(), DodgeStaminaCost.StaminaCost);
+		return false;
+	}
+	
+	UVFXExecutorComponent* VFXExecuterComponent = OwnerCharacter->FindComponentByClass<UVFXExecutorComponent>();
+	if(!IsValid(VFXExecuterComponent))
+	{
+		UE_LOG(LogTemp, Log, TEXT("RequestDodge rejected: VFXExecuterComponent is Missing. Character = %s"), *GetNameSafe(OwnerCharacter));
+		return false;
+	}
+	
 	FVector DodgeDirection;
-	const bool bHasMoveInput = Cast<ACPlayerCharacter>(OwnerCharacter) && Cast<ACPlayerCharacter>(OwnerCharacter)->GetLastMoveWorldDirection(DodgeDirection);
+	const ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter);
+	const bool bHasMoveInput = PlayerCharacter && PlayerCharacter->GetLastMoveWorldDirection(DodgeDirection);
 	UAnimMontage* MontageToPlay = bHasMoveInput ? DefaultDodgeMontage.Get() : BackStepDodgeMontage.Get();
 	if (!MontageToPlay)
 	{
@@ -52,11 +75,19 @@ bool UDodgeComponent::RequestDodge()
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: AnimInstance is missing. Character=%s"), *GetNameSafe(OwnerCharacter));
 		return false;
 	}
-
+	
 	const float Duration = AnimInstance->Montage_Play(MontageToPlay);
 	if (Duration <= 0.0f)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("RequestDodge failed: Montage_Play returned 0. Check AnimBP slot setup. Montage=%s"), *GetNameSafe(MontageToPlay));
+		return false;
+	}
+	
+	StartDodgeLoopVFX(OwnerCharacter->GetActorLocation());
+	
+	if (!StaminaComponent->ConsumeStamina(DodgeStaminaCost))
+	{
+		AnimInstance->Montage_Stop(0.0f, MontageToPlay);
 		return false;
 	}
 
@@ -65,9 +96,123 @@ bool UDodgeComponent::RequestDodge()
 	AnimInstance->Montage_SetEndDelegate(MontageEndedDelegate, MontageToPlay);
 	
 	ActiveDodgeMontage = MontageToPlay;
+	LastDodgeInputTime = GetWorld() ? GetWorld()->GetTimeSeconds() : -999.0f;
+	bJustDodgeConsumed = false;
 	bIsDodging = true;
 	return true;
 }
+
+bool UDodgeComponent::TryConsumeJustDodge(AActor* AttackCauser)
+{
+	if (!bEnableJustDodge || !bIsDodging || bJustDodgeConsumed)
+	{
+		return false;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	const float ElapsedAfterDodgeInput = World->GetTimeSeconds() - LastDodgeInputTime;
+	if (ElapsedAfterDodgeInput < JustDodgeMinElapsed || ElapsedAfterDodgeInput > JustDodgeWindow)
+	{
+		return false;
+	}
+
+	bJustDodgeConsumed = true;
+	HandleJustDodgeSucceeded(AttackCauser);
+	return true;
+}
+
+bool UDodgeComponent::ConsumeJustDodgeCounter()
+{
+	if (!bCanJustDodgeCounter)
+	{
+		return false;
+	}
+
+	CloseJustDodgeCounterWindow();
+	return true;
+}
+
+UVFXExecutorComponent* UDodgeComponent::ResolveVFXExecutor()
+{
+	if (IsValid(CachedVFXExecutor))
+		return CachedVFXExecutor;
+	
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+		return nullptr;
+	
+	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExecutorComponent>();
+	return CachedVFXExecutor;
+}
+
+
+//=============== VFX =================
+
+FVFXExecuteContext UDodgeComponent::MakeDodgeVFXContext(const FVector& DodgeDirection)
+{
+	FVFXExecuteContext Context;
+
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+	{
+		return Context;
+	}
+
+	Context.SourceActor = Owner;
+	Context.TargetActor = Owner;
+	Context.WorldTransform = Owner->GetActorTransform();
+	Context.AttachComponent = Owner->GetRootComponent();
+	Context.Direction = DodgeDirection;
+
+	return Context;
+}
+
+void UDodgeComponent::StartDodgeOneShotVFX(const FVector& DodgeDirection)
+{
+	//OneShot 전용 -> 따로 핸들 필요 없음.
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+	{
+		VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_Start,MakeDodgeVFXContext(DodgeDirection));
+	}
+}
+
+void UDodgeComponent::StartDodgeLoopVFX(const FVector& DodgeDirection)
+{
+	//Loop 전용
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (!IsValid(VFXExecutor))
+		return;
+	
+	StopDodgeLoopVFX(); //기존 Loop 정리
+	DodgeLoopVFXHandle = VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_Loop, MakeDodgeVFXContext(DodgeDirection));
+}
+
+void UDodgeComponent::StopDodgeLoopVFX()
+{
+	if (!DodgeLoopVFXHandle.IsValid())
+		return;
+	
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+		VFXExecutor->StopVFX(DodgeLoopVFXHandle);
+	
+	DodgeLoopVFXHandle.Reset();
+}
+
+void UDodgeComponent::FinishDodgeVFX()
+{
+	StopDodgeLoopVFX();
+	AActor* Owner = GetOwner();
+	
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (IsValid(VFXExecutor))
+		VFXExecutor->ExecuteVFX(VFX_DodgeTags::Character_Dodge_End,MakeDodgeVFXContext(Owner->GetActorLocation()));
+}
+
 
 void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupted)
 {
@@ -76,6 +221,107 @@ void UDodgeComponent::OnDodgeMontageEnded(UAnimMontage* Montage, bool bInterrupt
 		return;
 	}
 
+	StopDodgeLoopVFX();
 	bIsDodging = false;
+	bJustDodgeConsumed = false;
 	ActiveDodgeMontage = nullptr;
+}
+
+void UDodgeComponent::HandleJustDodgeSucceeded(AActor* AttackCauser)
+{
+	OpenJustDodgeCounterWindow();
+	PlayJustDodgeCameraFeedback();
+	ApplyJustDodgeTimeFeedback(AttackCauser);
+
+	UE_LOG(LogTemp, Log, TEXT("Just dodge succeeded. Owner=%s AttackCauser=%s"), *GetNameSafe(GetOwner()), *GetNameSafe(AttackCauser));
+}
+
+void UDodgeComponent::PlayJustDodgeCameraFeedback() const
+{
+	const ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	const USkeletalMeshComponent* MeshComponent = OwnerCharacter ? OwnerCharacter->GetMesh() : nullptr;
+	UCameraDirectingComponent* CameraDirectingComponent = FindCameraDirectingComponentFromMesh(MeshComponent);
+	if (!CameraDirectingComponent)
+	{
+		return;
+	}
+
+	if (bPlayJustDodgeCameraShake && JustDodgeCameraShake)
+	{
+		CameraDirectingComponent->PlayCameraShake(JustDodgeCameraShake, JustDodgeCameraShakeScale);
+	}
+
+	if (bPlayJustDodgeFOV)
+	{
+		CameraDirectingComponent->PlayFOV(JustDodgeFOV, JustDodgeFOVBlendInTime, JustDodgeFOVHoldTime, JustDodgeFOVBlendOutTime);
+	}
+}
+
+void UDodgeComponent::ApplyJustDodgeTimeFeedback(AActor* AttackCauser)
+{
+	if (!bUseJustDodgeTimeFeedback)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	UCombatTimeDilationSubsystem* TimeDilationSubsystem = World->GetSubsystem<UCombatTimeDilationSubsystem>();
+	if (!TimeDilationSubsystem)
+	{
+		return;
+	}
+
+	if (JustDodgeTimeFeedbackMode == ECombatTimeDilationFeedbackMode::HitStop)
+	{
+		TimeDilationSubsystem->PlayHitStop(JustDodgeHitStopSettings, GetOwner(), AttackCauser);
+	}
+	else
+	{
+		TimeDilationSubsystem->PlayWorldSlow(JustDodgeWorldSlowSettings);
+	}
+}
+
+void UDodgeComponent::OpenJustDodgeCounterWindow()
+{
+	if (!bEnableJustDodgeCounter)
+	{
+		return;
+	}
+
+	bCanJustDodgeCounter = true;
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	World->GetTimerManager().ClearTimer(JustDodgeCounterTimerHandle);
+	if (JustDodgeCounterWindow <= 0.0f)
+	{
+		CloseJustDodgeCounterWindow();
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		JustDodgeCounterTimerHandle,
+		this,
+		&UDodgeComponent::CloseJustDodgeCounterWindow,
+		JustDodgeCounterWindow,
+		false);
+}
+
+void UDodgeComponent::CloseJustDodgeCounterWindow()
+{
+	bCanJustDodgeCounter = false;
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(JustDodgeCounterTimerHandle);
+	}
 }

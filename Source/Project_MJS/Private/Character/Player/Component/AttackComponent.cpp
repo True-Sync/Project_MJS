@@ -4,24 +4,42 @@
 #include "Character/Player/CPlayerCharacter.h"
 #include "Character/Player/Component/DodgeComponent.h"
 #include "Character/Player/Component/PlayerMovementComponent.h"
+#include "Character/Player/Component/TargetingComponent.h"
 #include "Character/Player/Data/ComboAttackDataAsset.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "TimerManager.h"
 #include "DrawDebugHelpers.h"
+#include "IMediaCache.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/DamageType.h"
 #include "Kismet/GameplayStatics.h"
+#include "System/VFX/VFXExecutorComponent.h"
+#include "System/VFX/VFXGameplayTags.h"
 
 UAttackComponent::UAttackComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
-	// 평소에는 연산하지 않도록 꺼둡니다.
-	//PrimaryComponentTick.bStartWithTickEnabled = false; 
+	PrimaryComponentTick.bStartWithTickEnabled = false; 
 }
 
 void UAttackComponent::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void UAttackComponent::StartSwordTrail()
+{
+	ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!IsValid(OwnerCharacter))
+		return;
+
+	StartAttackLoopVFX(OwnerCharacter->GetActorForwardVector());
+}
+
+void UAttackComponent::EndSwordTrail()
+{
+	StopAttackLoopVFX();
 }
 
 void UAttackComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -110,13 +128,30 @@ bool UAttackComponent::PlayCombo(int32 ComboIndex)
 
 	if (ACPlayerCharacter* PlayerCharacter = Cast<ACPlayerCharacter>(OwnerCharacter))
 	{
-		FVector AttackDirection;
-		if (PlayerCharacter->GetLastMoveWorldDirection(AttackDirection))
+		bool bRotatedToTarget = false;
+		if (const UTargetingComponent* TargetingComponent = PlayerCharacter->GetTargetingComponent())
 		{
-			OwnerCharacter->SetActorRotation(AttackDirection.Rotation());
+			if (const AActor* TargetActor = TargetingComponent->GetBestAttackTarget())
+			{
+				const FVector TargetDirection = (TargetActor->GetActorLocation() - OwnerCharacter->GetActorLocation()).GetSafeNormal2D();
+				if (!TargetDirection.IsNearlyZero())
+				{
+					OwnerCharacter->SetActorRotation(TargetDirection.Rotation());
+					bRotatedToTarget = true;
+				}
+			}
+		}
+
+		if (!bRotatedToTarget)
+		{
+			FVector AttackDirection;
+			if (PlayerCharacter->GetLastMoveWorldDirection(AttackDirection))
+			{
+				OwnerCharacter->SetActorRotation(AttackDirection.Rotation());
+			}
 		}
 	}
-
+	
 	const float Duration = AnimInstance->Montage_Play(ComboEntry.Montage);
 	if (Duration <= 0.0f)
 	{
@@ -164,11 +199,88 @@ void UAttackComponent::OnAttackMontageEnded(UAnimMontage* Montage, bool bInterru
 		return;
 	}
 
+	StopAttackLoopVFX();
 	bIsAttacking = false;
 	bCanQueueCombo = false;
 	bComboQueued = false;
 	CurrentComboIndex = INDEX_NONE;
 	ActiveMontage = nullptr;
+}
+
+//--------------VFX------------------
+
+UVFXExecutorComponent* UAttackComponent::ResolveVFXExecutor()
+{
+	if (IsValid(CachedVFXExecutor))
+		return CachedVFXExecutor;
+	
+	AActor* Owner = GetOwner();
+	if (!IsValid(Owner))
+		return nullptr;
+	
+	CachedVFXExecutor = Owner->FindComponentByClass<UVFXExecutorComponent>();
+	return CachedVFXExecutor;
+}
+
+FVFXExecuteContext UAttackComponent::MakeAttackVFXContext(const FVector AttackDirection)
+{
+	FVFXExecuteContext Context;
+	
+    ACharacter* OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!IsValid(OwnerCharacter))
+		return Context;
+	
+	USkeletalMeshComponent* CharacterMesh = OwnerCharacter->GetMesh();
+	if (!IsValid(CharacterMesh))
+		return Context;
+	
+	
+	Context.SourceActor = OwnerCharacter;
+	Context.TargetActor = OwnerCharacter;
+	Context.WorldTransform = OwnerCharacter->GetActorTransform();
+	Context.AttachComponent = CharacterMesh;
+	Context.Direction = AttackDirection.GetSafeNormal();
+
+	return Context;
+}
+
+void UAttackComponent::StartAttackOneShotVFX(const FVector& AttackDirection)
+{
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+	{
+		VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_Start,MakeAttackVFXContext(AttackDirection));
+	}
+}
+
+void UAttackComponent::StartAttackLoopVFX(const FVector& AttackDirection)
+{
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (!IsValid(VFXExecutor))
+		return;
+	
+	StopAttackLoopVFX(); //기존 Loop 정리
+	AttackLoopVFXHandle = VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_Loop, MakeAttackVFXContext(AttackDirection));
+}
+
+void UAttackComponent::StopAttackLoopVFX()
+{
+	if (!AttackLoopVFXHandle.IsValid())
+		return;
+	
+	if (UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor())
+		VFXExecutor->StopVFX(AttackLoopVFXHandle);
+	
+	AttackLoopVFXHandle.Reset();
+}
+
+void UAttackComponent::FinishAttackVFX()
+{
+	StopAttackLoopVFX();
+	AActor* Owner = GetOwner();
+	
+	UVFXExecutorComponent* VFXExecutor = ResolveVFXExecutor();
+	if (IsValid(VFXExecutor))
+		VFXExecutor->ExecuteVFX(VFX_AttackTags::Character_Attack_End,MakeAttackVFXContext(Owner->GetActorForwardVector()));
 }
 
 // =============== 공격 판정 용 함수 구현부 ==================
@@ -189,7 +301,7 @@ void UAttackComponent::StartWeaponAttack(float KnockbackForce)
 	}
 
 	bIsWeaponAttacking = true;
-	//SetComponentTickEnabled(true);
+	SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndWeaponAttack()
@@ -200,10 +312,10 @@ void UAttackComponent::EndWeaponAttack()
 	}
 	
 	bIsWeaponAttacking = false;
-	//if (!bIsKickAttacking) 
-	//{
-	//	SetComponentTickEnabled(false); 
-	//}
+	if (!bIsKickAttacking) 
+	{
+		SetComponentTickEnabled(false); 
+	}
 }
 
 void UAttackComponent::CheckWeaponTrace()
@@ -237,9 +349,10 @@ void UAttackComponent::CheckWeaponTrace()
 		if (bHit && HitResult.GetActor())
 		{
 			AActor* HitActor = HitResult.GetActor();
-			if (!HitActors.Contains(HitActor))
+			const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+			if (!HitActors.Contains(HitActorPtr))
 			{
-				HitActors.Add(HitActor); 
+				HitActors.Add(HitActorPtr); 
 				
 				APawn* OwnerPawn = Cast<APawn>(GetOwner());
 				AController* InstigatorController = OwnerPawn ? OwnerPawn->GetController() : nullptr;
@@ -268,7 +381,7 @@ void UAttackComponent::StartKickAttack(FName SocketName, float KnockbackForce)
 	CurrentKnockbackForce = KnockbackForce;
 	
 	bIsKickAttacking = true;
-	//SetComponentTickEnabled(true);
+	SetComponentTickEnabled(true);
 }
 
 void UAttackComponent::EndKickAttack()
@@ -279,10 +392,10 @@ void UAttackComponent::EndKickAttack()
 	}
 	
 	bIsKickAttacking = false;
-	//if (!bIsWeaponAttacking)
-	//{
-	//	SetComponentTickEnabled(false);
-	//}
+	if (!bIsWeaponAttacking)
+	{
+		SetComponentTickEnabled(false);
+	}
 }
 
 void UAttackComponent::CheckKickTrace()
@@ -301,8 +414,8 @@ void UAttackComponent::CheckKickTrace()
 	
 	bool bHit = GetWorld()->SweepSingleByChannel(
 		HitResult, 
-		KickLocation, // Start
-		KickLocation, // End
+		KickLocation,
+		KickLocation,
 		FQuat::Identity,
 		ECC_GameTraceChannel1, 
 		FCollisionShape::MakeSphere(KickRadius), 
@@ -314,9 +427,10 @@ void UAttackComponent::CheckKickTrace()
 	if (bHit && HitResult.GetActor())
 	{
 		AActor* HitActor = HitResult.GetActor();
-		if (!HitActors.Contains(HitActor))
+		const TWeakObjectPtr<AActor> HitActorPtr(HitActor);
+		if (!HitActors.Contains(HitActorPtr))
 		{
-			HitActors.Add(HitActor);
+			HitActors.Add(HitActorPtr);
 			
 			AController* InstigatorController = OwnerCharacter->GetController();
 			

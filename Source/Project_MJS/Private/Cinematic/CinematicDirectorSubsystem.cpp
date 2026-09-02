@@ -1,38 +1,40 @@
 #include "Cinematic/CinematicDirectorSubsystem.h"
 
-#include "Camera/PlayerCameraManager.h"
-#include "Cinematic/CinematicParticipant.h"
-#include "Components/ActorComponent.h"
-#include "Components/SceneComponent.h"
-#include "DefaultLevelSequenceInstanceData.h"
-#include "DrawDebugHelpers.h"
+#include "Cinematic/CinematicInputLockSubsystem.h"
+#include "Cinematic/Director/CinematicSequenceDirectorService.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "LevelSequence.h"
 #include "LevelSequenceActor.h"
 #include "LevelSequencePlayer.h"
-#include "MovieSceneSequencePlaybackSettings.h"
+#include "TimerManager.h"
+
+DEFINE_LOG_CATEGORY(LogCinematicSystem);
 
 bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest& Request)
 {
+	if (bIsFinishing)
+	{
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic rejected: a cinematic is currently finishing."));
+		return false;
+	}
+
 	if (!Request.Sequence)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: Sequence is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: Sequence is missing."));
 		return false;
 	}
 
 	UWorld* World = GetWorld();
 	if (!World)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: World is missing."));
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: World is missing."));
 		return false;
 	}
 
 	if (!ShouldAllowPlaybackForNetworkPolicy(Request))
 	{
-		UE_LOG(LogTemp, Verbose, TEXT("PlayCinematic skipped by network policy. Sequence=%s Policy=%d"), *GetNameSafe(Request.Sequence), static_cast<int32>(Request.NetworkPolicy));
+		UE_LOG(LogCinematicSystem, Verbose, TEXT("PlayCinematic skipped by network policy. Sequence=%s Policy=%d"), *GetNameSafe(Request.Sequence), static_cast<int32>(Request.NetworkPolicy));
 		return false;
 	}
 
@@ -40,24 +42,23 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 	{
 		if (!Request.bStopPreviousCinematic)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("PlayCinematic rejected: another cinematic is already active."));
+			UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic rejected: another cinematic is already active."));
 			return false;
 		}
 
 		FinishCinematic(true);
 	}
 
-	FMovieSceneSequencePlaybackSettings PlaybackSettings;
 	ALevelSequenceActor* CreatedSequenceActor = nullptr;
-	ActiveSequencePlayer = ULevelSequencePlayer::CreateLevelSequencePlayer(World, Request.Sequence, PlaybackSettings, CreatedSequenceActor);
+	ActiveSequencePlayer = FCinematicSequenceDirectorService::CreateSequencePlayer(World, Request.Sequence, CreatedSequenceActor);
 	ActiveSequenceActor = CreatedSequenceActor;
 	if (!ActiveSequencePlayer)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("PlayCinematic failed: could not create LevelSequencePlayer. Sequence=%s"), *GetNameSafe(Request.Sequence));
-		ActiveSequenceActor = nullptr;
+		UE_LOG(LogCinematicSystem, Warning, TEXT("PlayCinematic failed: could not create LevelSequencePlayer. Sequence=%s"), *GetNameSafe(Request.Sequence));
 		return false;
 	}
 
+	TWeakObjectPtr<ULevelSequencePlayer> CreatedSequencePlayer = ActiveSequencePlayer;
 	ActivePlayerController = ResolvePlayerController(Request);
 	PreviousViewTarget = ActivePlayerController ? ActivePlayerController->GetViewTarget() : nullptr;
 	ActiveBlendOutTime = FMath::Max(0.0f, Request.BlendOutTime);
@@ -65,18 +66,33 @@ bool UCinematicDirectorSubsystem::PlayCinematic(const FCinematicPlaybackRequest&
 
 	FTransform AnchorWorldTransform = FTransform::Identity;
 	bool bAppliedDynamicTransform = false;
-	ApplyDynamicTransform(Request, AnchorWorldTransform, bAppliedDynamicTransform);
-	ApplyBindingOverrides(Request);
-	DrawDebugAnchorTransform(Request, bAppliedDynamicTransform ? AnchorWorldTransform : (ActiveSequenceActor ? ActiveSequenceActor->GetActorTransform() : FTransform::Identity));
+	FCinematicSequenceDirectorService::ConfigureSequenceActor(
+		ActiveSequenceActor,
+		ActivePlayerController,
+		Request,
+		AnchorWorldTransform,
+		bAppliedDynamicTransform);
 
 	BuildActiveContext(Request, AnchorWorldTransform, bAppliedDynamicTransform);
-	CollectParticipants(Request);
-	NotifyParticipantsStarted();
+	ParticipantCoordinator.CollectParticipants(World, Request);
+	PostActionExecutor.BeginPlayback(
+		World,
+		Request.PostAction,
+		FTimerDelegate::CreateUObject(this, &UCinematicDirectorSubsystem::ExecutePlaybackLevelLoad));
+	ParticipantCoordinator.NotifyParticipantsStarted(ActiveContext);
+
+	if (ActiveSequencePlayer != CreatedSequencePlayer.Get())
+	{
+		UE_LOG(LogCinematicSystem, Verbose,
+			TEXT("PlayCinematic aborted during participant startup. Sequence=%s"),
+			*GetNameSafe(Request.Sequence));
+		return false;
+	}
 
 	ActiveSequencePlayer->OnFinished.AddDynamic(this, &UCinematicDirectorSubsystem::HandleSequenceFinished);
 	ActiveSequencePlayer->Play();
 
-	UE_LOG(LogTemp, Log, TEXT("PlayCinematic succeeded: Sequence=%s Participants=%d"), *GetNameSafe(Request.Sequence), ActiveParticipants.Num());
+	UE_LOG(LogCinematicSystem, Log, TEXT("PlayCinematic succeeded: Sequence=%s Participants=%d"), *GetNameSafe(Request.Sequence), ParticipantCoordinator.Num());
 	return true;
 }
 
@@ -97,10 +113,24 @@ void UCinematicDirectorSubsystem::HandleSequenceFinished()
 
 void UCinematicDirectorSubsystem::FinishCinematic(bool bStopPlayback)
 {
-	if (!ActiveSequencePlayer && !ActiveSequenceActor)
+	if (bIsFinishing)
 	{
 		return;
 	}
+
+	if (!ActiveSequencePlayer && !ActiveSequenceActor)
+	{
+		if (bStopPlayback)
+		{
+			PostActionExecutor.Cancel(GetWorld());
+		}
+
+		return;
+	}
+
+	bIsFinishing = true;
+	const FCinematicPostActionConfig CompletedPostAction = PostActionExecutor.GetActiveConfig();
+	PostActionExecutor.Cancel(GetWorld());
 
 	if (ActiveSequencePlayer)
 	{
@@ -112,29 +142,77 @@ void UCinematicDirectorSubsystem::FinishCinematic(bool bStopPlayback)
 		}
 	}
 
-	NotifyParticipantsEnded();
-	RestoreViewTarget();
+	const bool bNaturalFinish = !bStopPlayback;
+	TWeakObjectPtr<APawn> PawnToPreserve;
+	FTransform CinematicEndTransform = FTransform::Identity;
 
-	if (IsValid(ActiveSequenceActor))
+	if (bNaturalFinish && ActivePlayerController)
 	{
-		ActiveSequenceActor->Destroy();
+		if (APawn* Pawn = ActivePlayerController->GetPawn())
+		{
+			if (IsValid(Pawn))
+			{
+				PawnToPreserve = Pawn;
+				CinematicEndTransform = Pawn->GetActorTransform();
+			}
+		}
 	}
+
+	ParticipantCoordinator.NotifyParticipantsEnded(ActiveContext);
+
+	if (PawnToPreserve.IsValid())
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().SetTimerForNextTick([PawnToPreserve, CinematicEndTransform]()
+			{
+				if (APawn* Pawn = PawnToPreserve.Get())
+				{
+					Pawn->TeleportTo(CinematicEndTransform.GetLocation(), CinematicEndTransform.Rotator(), false, true);
+				}
+			});
+		}
+	}
+
+	RestoreViewTarget();
+	FCinematicSequenceDirectorService::DestroySequenceActor(ActiveSequenceActor);
 
 	ActiveSequencePlayer = nullptr;
 	ActiveSequenceActor = nullptr;
 	ActivePlayerController = nullptr;
 	PreviousViewTarget = nullptr;
-	ActiveParticipants.Reset();
+	ParticipantCoordinator.Reset();
 	ActiveContext = FCinematicPlaybackContext();
 	ActiveBlendOutTime = 0.15f;
 	bShouldRestoreViewTarget = true;
+
+	if (bNaturalFinish)
+	{
+		PostActionExecutor.ExecuteOnNaturalFinish(
+			GetWorld(),
+			CompletedPostAction,
+			FTimerDelegate::CreateUObject(this, &UCinematicDirectorSubsystem::ExecutePendingPostAction));
+	}
+
+	bIsFinishing = false;
 }
 
 void UCinematicDirectorSubsystem::RestoreViewTarget()
 {
-	if (bShouldRestoreViewTarget && ActivePlayerController && PreviousViewTarget)
+	if (!bShouldRestoreViewTarget || !ActivePlayerController)
 	{
-		ActivePlayerController->SetViewTargetWithBlend(PreviousViewTarget, ActiveBlendOutTime);
+		return;
+	}
+
+	AActor* TargetToRestore = IsValid(PreviousViewTarget) ? PreviousViewTarget.Get() : nullptr;
+	if (!TargetToRestore)
+	{
+		TargetToRestore = ActivePlayerController->GetPawn();
+	}
+
+	if (IsValid(TargetToRestore))
+	{
+		ActivePlayerController->SetViewTargetWithBlend(TargetToRestore, ActiveBlendOutTime);
 	}
 }
 
@@ -192,296 +270,65 @@ void UCinematicDirectorSubsystem::BuildActiveContext(const FCinematicPlaybackReq
 	ActiveContext.SubjectActor = Request.SubjectActor;
 	ActiveContext.PlayerController = ActivePlayerController;
 	ActiveContext.SequenceActor = ActiveSequenceActor;
-	ActiveContext.bAffectAllParticipants = Request.bAffectAllParticipants;
+	ActiveContext.ParticipantScope = Request.ParticipantScope;
+	ActiveContext.AnchorMode = Request.AnchorMode;
+	ActiveContext.RotationSource = Request.RotationSource;
 	ActiveContext.AnchorWorldTransform = AnchorWorldTransform;
 	ActiveContext.bAppliedDynamicTransform = bAppliedDynamicTransform;
 }
 
-void UCinematicDirectorSubsystem::ApplyBindingOverrides(const FCinematicPlaybackRequest& Request) const
+FString UCinematicDirectorSubsystem::GetCinematicStatusSummary() const
 {
-	if (!ActiveSequenceActor)
+	if (!IsCinematicPlaying())
+	{
+		return TEXT("Cinematic: Not Playing");
+	}
+
+	TArray<FString> Lines;
+	Lines.Add(TEXT("Cinematic: Playing"));
+	Lines.Add(FString::Printf(TEXT("  Sequence: %s"), *GetNameSafe(ActiveContext.Sequence)));
+	Lines.Add(FString::Printf(TEXT("  AnchorMode: %d"), static_cast<int32>(ActiveContext.AnchorMode)));
+	Lines.Add(FString::Printf(TEXT("  RotationSource: %d"), static_cast<int32>(ActiveContext.RotationSource)));
+	Lines.Add(FString::Printf(TEXT("  Participants: %d"), ParticipantCoordinator.Num()));
+
+	const UCinematicInputLockSubsystem* InputLockSubsystem = GetWorld() ? GetWorld()->GetSubsystem<UCinematicInputLockSubsystem>() : nullptr;
+	const bool bInputLocked = InputLockSubsystem && IsValid(ActivePlayerController) &&
+		(InputLockSubsystem->IsMoveInputLocked(ActivePlayerController) ||
+			InputLockSubsystem->IsLookInputLocked(ActivePlayerController) ||
+			InputLockSubsystem->IsGameplayInputLocked(ActivePlayerController));
+	Lines.Add(FString::Printf(TEXT("  InputLocked: %s"), bInputLocked ? TEXT("Yes") : TEXT("No")));
+
+	return FString::Join(Lines, TEXT("\n"));
+}
+
+void UCinematicDirectorSubsystem::Deinitialize()
+{
+	FinishCinematic(true);
+	PostActionExecutor.Cancel(GetWorld());
+	Super::Deinitialize();
+}
+
+void UCinematicDirectorSubsystem::ExecutePlaybackLevelLoad()
+{
+	FCinematicPostActionConfig Config;
+	if (!PostActionExecutor.ConsumeDuringPlayback(GetWorld(), Config))
 	{
 		return;
 	}
 
-	for (const FCinematicBindingOverride& BindingOverride : Request.BindingOverrides)
+	if (Config.bStopCinematicBeforeLoad)
 	{
-		if (BindingOverride.BindingTag.IsNone())
-		{
-			continue;
-		}
-
-		TArray<AActor*> BoundActors;
-		for (AActor* Actor : BindingOverride.Actors)
-		{
-			if (IsValid(Actor))
-			{
-				BoundActors.Add(Actor);
-			}
-		}
-
-		if (BoundActors.IsEmpty())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Cinematic binding override skipped: Tag=%s has no valid actors."), *BindingOverride.BindingTag.ToString());
-			continue;
-		}
-
-		ActiveSequenceActor->SetBindingByTag(BindingOverride.BindingTag, BoundActors, BindingOverride.bAllowBindingsFromAsset);
+		FinishCinematic(true);
 	}
+
+	FCinematicPostActionExecutor::ExecuteLevelLoad(GetWorld(), Config, TEXT("DuringPlayback"));
 }
 
-void UCinematicDirectorSubsystem::ApplyDynamicTransform(const FCinematicPlaybackRequest& Request, FTransform& OutAnchorWorldTransform, bool& bOutAppliedDynamicTransform) const
+void UCinematicDirectorSubsystem::ExecutePendingPostAction()
 {
-	OutAnchorWorldTransform = FTransform::Identity;
-	bOutAppliedDynamicTransform = false;
-
-	if (!ActiveSequenceActor || Request.AnchorMode == ECinematicAnchorMode::AuthoredWorld)
+	FCinematicPostActionConfig Config;
+	if (PostActionExecutor.ConsumePendingPostAction(GetWorld(), Config))
 	{
-		return;
-	}
-
-	OutAnchorWorldTransform = ResolveDynamicAnchorTransform(Request);
-	ActiveSequenceActor->SetActorTransform(OutAnchorWorldTransform);
-
-	UDefaultLevelSequenceInstanceData* InstanceData = NewObject<UDefaultLevelSequenceInstanceData>(ActiveSequenceActor, NAME_None, RF_Transient);
-	if (InstanceData)
-	{
-		InstanceData->TransformOrigin = OutAnchorWorldTransform;
-		ActiveSequenceActor->DefaultInstanceData = InstanceData;
-		ActiveSequenceActor->bOverrideInstanceData = true;
-	}
-
-	bOutAppliedDynamicTransform = true;
-}
-
-FTransform UCinematicDirectorSubsystem::ResolveDynamicAnchorTransform(const FCinematicPlaybackRequest& Request) const
-{
-	FTransform AnchorTransform = FTransform::Identity;
-
-	if (Request.AnchorMode == ECinematicAnchorMode::ExplicitTransform)
-	{
-		AnchorTransform = Request.ExplicitWorldTransform;
-	}
-	else
-	{
-		const AActor* AnchorActor = ResolveAnchorActor(Request);
-		AnchorTransform = ResolveActorOrSocketTransform(AnchorActor, Request.AnchorSocketName);
-
-		if (Request.AnchorMode == ECinematicAnchorMode::InstigatorToSubject)
-		{
-			const FTransform TargetTransform = ResolveActorOrSocketTransform(Request.SubjectActor, Request.TargetSocketName);
-			const FVector DirectionToTarget = TargetTransform.GetLocation() - AnchorTransform.GetLocation();
-			if (!DirectionToTarget.IsNearlyZero())
-			{
-				const FRotator LookAtRotation = FRotationMatrix::MakeFromX(DirectionToTarget.GetSafeNormal()).Rotator();
-				AnchorTransform.SetRotation(NormalizeCinematicRotation(LookAtRotation, Request.bUseYawOnly).Quaternion());
-			}
-		}
-	}
-
-	const FRotator FinalRotation = ResolveRotation(Request, AnchorTransform);
-	AnchorTransform.SetRotation(FinalRotation.Quaternion());
-	AnchorTransform.NormalizeRotation();
-
-	FTransform FinalTransform = Request.RelativeTransform * AnchorTransform;
-	FinalTransform.NormalizeRotation();
-	return FinalTransform;
-}
-
-FTransform UCinematicDirectorSubsystem::ResolveActorOrSocketTransform(const AActor* Actor, FName SocketName) const
-{
-	if (!IsValid(Actor))
-	{
-		return FTransform::Identity;
-	}
-
-	if (!SocketName.IsNone())
-	{
-		TArray<USceneComponent*> SceneComponents;
-		Actor->GetComponents(SceneComponents);
-
-		for (const USceneComponent* SceneComponent : SceneComponents)
-		{
-			if (IsValid(SceneComponent) && SceneComponent->DoesSocketExist(SocketName))
-			{
-				return SceneComponent->GetSocketTransform(SocketName, RTS_World);
-			}
-		}
-	}
-
-	return Actor->GetActorTransform();
-}
-
-AActor* UCinematicDirectorSubsystem::ResolveAnchorActor(const FCinematicPlaybackRequest& Request) const
-{
-	if (Request.AnchorActor)
-	{
-		return Request.AnchorActor;
-	}
-
-	switch (Request.AnchorMode)
-	{
-	case ECinematicAnchorMode::SubjectActor:
-		return Request.SubjectActor;
-	case ECinematicAnchorMode::InstigatorActor:
-	case ECinematicAnchorMode::InstigatorToSubject:
-		return Request.InstigatorActor;
-	default:
-		return nullptr;
-	}
-}
-
-FRotator UCinematicDirectorSubsystem::ResolveRotation(const FCinematicPlaybackRequest& Request, const FTransform& AnchorTransform) const
-{
-	FRotator Rotation = AnchorTransform.Rotator();
-
-	switch (Request.RotationSource)
-	{
-	case ECinematicRotationSource::InstigatorActor:
-		Rotation = ResolveActorOrSocketTransform(Request.InstigatorActor, Request.AnchorSocketName).Rotator();
-		break;
-	case ECinematicRotationSource::SubjectActor:
-		Rotation = ResolveActorOrSocketTransform(Request.SubjectActor, Request.TargetSocketName).Rotator();
-		break;
-	case ECinematicRotationSource::PlayerControlRotation:
-		if (ActivePlayerController)
-		{
-			Rotation = ActivePlayerController->GetControlRotation();
-		}
-		break;
-	case ECinematicRotationSource::PlayerCameraRotation:
-		if (ActivePlayerController && ActivePlayerController->PlayerCameraManager)
-		{
-			Rotation = ActivePlayerController->PlayerCameraManager->GetCameraRotation();
-		}
-		else if (ActivePlayerController)
-		{
-			Rotation = ActivePlayerController->GetControlRotation();
-		}
-		break;
-	case ECinematicRotationSource::ExplicitRotation:
-		Rotation = Request.ExplicitRotation;
-		break;
-	case ECinematicRotationSource::AnchorTransform:
-	default:
-		break;
-	}
-
-	return NormalizeCinematicRotation(Rotation, Request.bUseYawOnly);
-}
-
-FRotator UCinematicDirectorSubsystem::NormalizeCinematicRotation(const FRotator& Rotation, bool bUseYawOnly) const
-{
-	FRotator NormalizedRotation = Rotation;
-	NormalizedRotation.Normalize();
-
-	if (bUseYawOnly)
-	{
-		NormalizedRotation.Pitch = 0.0f;
-		NormalizedRotation.Roll = 0.0f;
-		NormalizedRotation.Normalize();
-	}
-
-	return NormalizedRotation;
-}
-
-void UCinematicDirectorSubsystem::DrawDebugAnchorTransform(const FCinematicPlaybackRequest& Request, const FTransform& AnchorWorldTransform) const
-{
-	if (!Request.bDrawDebugAnchor)
-	{
-		return;
-	}
-
-	const UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	const FVector Location = AnchorWorldTransform.GetLocation();
-	const FRotator Rotation = AnchorWorldTransform.Rotator();
-	const float Scale = FMath::Max(1.0f, Request.DebugDrawScale);
-	const float Duration = FMath::Max(0.0f, Request.DebugDrawDuration);
-
-	DrawDebugCoordinateSystem(World, Location, Rotation, Scale, false, Duration, 0, 2.0f);
-	DrawDebugSphere(World, Location, 16.0f, 16, FColor::Cyan, false, Duration, 0, 1.5f);
-}
-
-void UCinematicDirectorSubsystem::CollectParticipants(const FCinematicPlaybackRequest& Request)
-{
-	ActiveParticipants.Reset();
-
-	AddActorParticipants(Request.InstigatorActor);
-	AddActorParticipants(Request.SubjectActor);
-
-	for (AActor* ParticipantActor : Request.AdditionalParticipants)
-	{
-		AddActorParticipants(ParticipantActor);
-	}
-
-	if (!Request.bAffectAllParticipants)
-	{
-		return;
-	}
-
-	UWorld* World = GetWorld();
-	if (!World)
-	{
-		return;
-	}
-
-	for (TActorIterator<AActor> It(World); It; ++It)
-	{
-		AddActorParticipants(*It);
-	}
-}
-
-void UCinematicDirectorSubsystem::AddActorParticipants(AActor* Actor)
-{
-	if (!IsValid(Actor))
-	{
-		return;
-	}
-
-	AddParticipantObject(Actor);
-
-	TArray<UActorComponent*> Components;
-	Actor->GetComponents(Components);
-	for (UActorComponent* Component : Components)
-	{
-		AddParticipantObject(Component);
-	}
-}
-
-void UCinematicDirectorSubsystem::AddParticipantObject(UObject* Object)
-{
-	if (!IsValid(Object) || !Object->GetClass()->ImplementsInterface(UCinematicParticipant::StaticClass()))
-	{
-		return;
-	}
-
-	ActiveParticipants.AddUnique(Object);
-}
-
-void UCinematicDirectorSubsystem::NotifyParticipantsStarted()
-{
-	for (UObject* Participant : ActiveParticipants)
-	{
-		if (IsValid(Participant))
-		{
-			ICinematicParticipant::Execute_OnCinematicStarted(Participant, ActiveContext);
-		}
-	}
-}
-
-void UCinematicDirectorSubsystem::NotifyParticipantsEnded()
-{
-	for (int32 Index = ActiveParticipants.Num() - 1; Index >= 0; --Index)
-	{
-		UObject* Participant = ActiveParticipants[Index];
-		if (IsValid(Participant))
-		{
-			ICinematicParticipant::Execute_OnCinematicEnded(Participant, ActiveContext);
-		}
+		FCinematicPostActionExecutor::ExecuteLevelLoad(GetWorld(), Config, TEXT("OnFinishDelayed"));
 	}
 }

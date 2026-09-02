@@ -71,8 +71,10 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bEnabled = true;
 
+	// 시네마틱 참가자(ICinematicParticipant) 수집 범위. 
+	// 기본값은 ExplicitOnly: 불필요한 전역 스캔을 피하고 충돌 위험을 줄인다.
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
-	bool bAffectAllParticipants = true;
+	ECinematicParticipantScope ParticipantScope = ECinematicParticipantScope::ExplicitOnly;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bRestoreViewTarget = true;
@@ -81,11 +83,19 @@ private:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
 	bool bStopTargetMontagesOnTrigger = true;
 
+	// 다른 시네마틱이 이미 재생 중일 때 이 트리거가 기존 컷신을 덮어쓸지 결정합니다.
+	// false면 현재 시네마틱이 끝날 때까지 이 트리거는 무시됩니다 (중복/충돌 방지).
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true"))
+	bool bAllowOverrideWhilePlaying = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic", meta = (AllowPrivateAccess = "true", ClampMin = "0.0"))
 	float BlendOutTime = 0.15f;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|Network", meta = (AllowPrivateAccess = "true"))
 	ECinematicNetworkPolicy NetworkPolicy = ECinematicNetworkPolicy::LocalOnly;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Cinematic|PostAction", meta = (AllowPrivateAccess = "true"))
+	FCinematicPostActionConfig PostAction;
 
 	
 	// =========== 런타임 바인딩 파라미터 세팅 ===========

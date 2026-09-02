@@ -15,8 +15,7 @@ UFMODAnimNotifyPlay::UFMODAnimNotifyPlay()
 #endif // WITH_EDITORONLY_DATA
 }
 
-void UFMODAnimNotifyPlay::Notify(USkeletalMeshComponent* MeshComp, UAnimSequenceBase* AnimSeq,
-    const FAnimNotifyEventReference& EventReference)
+void UFMODAnimNotifyPlay::Notify(USkeletalMeshComponent *MeshComp, UAnimSequenceBase *AnimSeq, const FAnimNotifyEventReference& EventReference)
 {
     if (Event)
     {
